@@ -1,0 +1,2 @@
+[console_scripts]
+aid2go = aid2go.cli.app:app

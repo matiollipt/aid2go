@@ -1,0 +1,26 @@
+paths:
+  data_dir: "data"
+  output_dir: "output"
+
+data:
+  go_obo_url: "https://purl.obolibrary.org/obo/go/go-basic.obo"
+  goa_url: "http://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_gcrp.gaf.gz"
+  dataset_version: "v1"
+  evidence_codes:
+    cafa: ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "TAS", "IC"]
+
+model:
+  name: "baseline"
+  hidden_channels: 64
+  num_layers: 2
+  dropout: 0.1
+
+training:
+  batch_size: 1024
+  epochs: 5
+  learning_rate: 0.001
+  device: "cpu" # Default to CPU for safety in unknown envs, change to cuda if available
+
+tracking:
+  enabled: false
+  experiment_name: "aid2go_default"

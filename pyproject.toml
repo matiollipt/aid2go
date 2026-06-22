@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aid2go"
+version = "0.1.0"
+description = "Protein Function Prediction with Heterogeneous GNNs"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.0.0",
+    "torch-geometric>=2.3.0",
+    "pandas",
+    "numpy",
+    "networkx",
+    "scikit-learn",
+    "typer",
+    "pydantic>=2.0",
+    "pyyaml",
+    "transformers",
+    "mlflow",
+    "obonet",
+    "requests",
+    "tqdm",
+    "matplotlib",
+    "seaborn"
+]
+
+[project.scripts]
+aid2go = "aid2go.cli.app:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
