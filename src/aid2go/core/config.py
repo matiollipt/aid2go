@@ -12,15 +12,28 @@ class PathsConfig(BaseModel):
 
 class DataConfig(BaseModel):
     go_obo_url: str = "https://purl.obolibrary.org/obo/go/go-basic.obo"
-    goa_url: str = "http://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_gcrp.gaf.gz" # Example default
+    goa_url: str = "http://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_gcrp.gaf.gz"
     evidence_codes: Dict[str, List[str]] = Field(default_factory=dict)
     
     # Preprocessing
     min_sequence_length: int = 50
     max_sequence_length: int = 4000
-    ppi_score_threshold: int = 700
-    
     dataset_version: str = "v1"
+    
+    # Prototyping and graph parameters
+    top_n_go_terms: int = 1000
+    max_proteins: int = 5000
+    
+    # Protein sequence model and embedding storage
+    esm_model_name: str = "facebook/esm2_t33_650M_UR50D"
+    
+    # KNN Graph parameters
+    knn_k: int = 10
+    strict_cosine_similarity: bool = False
+    
+    # Protein structural representation
+    protein_representation: str = "node" # "node" or "graph"
+    c_alpha_distance_threshold: float = 8.0
 
 class ModelConfig(BaseModel):
     name: ModelName = ModelName.BASELINE

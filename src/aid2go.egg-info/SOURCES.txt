@@ -1,4 +1,3 @@
-LICENSE
 README.md
 pyproject.toml
 src/aid2go/__init__.py

@@ -8,7 +8,6 @@ import requests
 from obonet import read_obo
 from transformers import BertTokenizer, BertModel
 from tqdm.auto import tqdm
-from torch_geometric.data import Data, HeteroData
 
 from aid2go.core.config import AppConfig
 
@@ -26,7 +25,7 @@ def download_go_obo(url: str, output_path: Path):
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
 
-def parse_go_dag(obo_path: Path, output_dir: Path):
+def parse_go_dag(obo_path: Path, output_dir: Path, top_n: int):
     logger.info("Parsing GO DAG...")
     go_dag = read_obo(str(obo_path), ignore_obsolete=True)
     
@@ -41,14 +40,29 @@ def parse_go_dag(obo_path: Path, output_dir: Path):
         })
     
     go_df = pd.DataFrame(nodes_data)
+    
+    # Calculate degree
+    in_degrees = dict(go_dag.in_degree())
+    out_degrees = dict(go_dag.out_degree())
+    go_df["in_degree"] = go_df["term"].map(in_degrees).fillna(0).astype(int)
+    go_df["out_degree"] = go_df["term"].map(out_degrees).fillna(0).astype(int)
+    go_df["degree"] = go_df["in_degree"] + go_df["out_degree"]
+    
+    # Sort and take top N
+    go_df = go_df.sort_values(by="degree", ascending=False).head(top_n).copy()
     go_df.to_csv(output_dir / "go_nodes.csv", index=False)
+    logger.info(f"Saved top {len(go_df)} GO terms to {output_dir / 'go_nodes.csv'}")
+    
+    selected_terms = set(go_df["term"])
     
     edges = []
     for u, v, d in go_dag.edges:
-        edges.append({"source": u, "relationship": d, "target": v})
+        if u in selected_terms and v in selected_terms:
+            edges.append({"source": u, "relationship": d, "target": v})
     
     edges_df = pd.DataFrame(edges)
     edges_df.to_csv(output_dir / "go_edges.tsv", sep="\t", index=False)
+    logger.info(f"Saved {len(edges_df)} GO edges to {output_dir / 'go_edges.tsv'}")
     
     return go_df, edges_df
 
@@ -61,10 +75,6 @@ class TextDataset(torch.utils.data.Dataset):
         return self.texts[idx]
 
 def embed_go_terms(go_df: pd.DataFrame, output_path: Path, device: str = "cuda"):
-    if output_path.exists():
-        logger.info(f"GO embeddings exist at {output_path}")
-        return
-
     logger.info("Embedding GO terms...")
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     model = BertModel.from_pretrained("bert-base-uncased").to(device)
@@ -88,14 +98,14 @@ def embed_go_terms(go_df: pd.DataFrame, output_path: Path, device: str = "cuda")
                 
     with open(output_path, "wb") as f:
         pickle.dump(embeddings, f)
+    logger.info(f"Saved {len(embeddings)} GO embeddings to {output_path}")
 
 def run_preprocess_go(config: AppConfig, processed_dir: Path):
     processed_dir.mkdir(parents=True, exist_ok=True)
     obo_path = processed_dir / "go-basic.obo"
     
     download_go_obo(config.data.go_obo_url, obo_path)
-    go_df, _ = parse_go_dag(obo_path, processed_dir)
+    go_df, _ = parse_go_dag(obo_path, processed_dir, top_n=config.data.top_n_go_terms)
     
     embed_go_terms(go_df, processed_dir / "go_embeddings.pkl", device=config.training.device)
-    
     logger.info("GO Preprocessing complete.")

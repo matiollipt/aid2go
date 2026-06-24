@@ -8,6 +8,13 @@ data:
   dataset_version: "v1"
   evidence_codes:
     cafa: ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "TAS", "IC"]
+  top_n_go_terms: 1000
+  max_proteins: 5000
+  esm_model_name: "facebook/esm2_t33_650M_UR50D"
+  knn_k: 10
+  strict_cosine_similarity: false
+  protein_representation: "node"
+  c_alpha_distance_threshold: 8.0
 
 model:
   name: "baseline"

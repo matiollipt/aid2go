@@ -24,7 +24,9 @@ dependencies = [
     "requests",
     "tqdm",
     "matplotlib",
-    "seaborn"
+    "seaborn",
+    "h5py",
+    "faiss-cpu"
 ]
 
 [project.scripts]

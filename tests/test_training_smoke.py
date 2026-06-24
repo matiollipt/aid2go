@@ -19,6 +19,8 @@ def synthetic_data():
     edge_index[1] = edge_index[1] % 10
     
     data["protein", "has_function", "go"].edge_index = edge_index
+    data["go", "function_of", "protein"].edge_index = edge_index.flip(0)
+    data["go"].ia = torch.ones(10, 1)
     
     transform = RandomLinkSplit(
         num_val=0.1, num_test=0.1,

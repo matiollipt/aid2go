@@ -14,3 +14,5 @@ requests
 tqdm
 matplotlib
 seaborn
+h5py
+faiss-cpu
