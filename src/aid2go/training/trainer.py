@@ -2,6 +2,7 @@ import logging
 import torch
 import torch.nn.functional as F
 import pandas as pd
+import torch_geometric
 from torch_geometric.loader import NeighborLoader, LinkNeighborLoader
 from pathlib import Path
 from tqdm.auto import tqdm
@@ -100,6 +101,9 @@ class Trainer:
         self.model.eval()
         preds = []
         targets = []
+
+        if isinstance(loader, (dict, torch_geometric.data.HeteroData)):
+            loader = [loader]
         
         for batch in tqdm(loader, desc="Evaluating"):
             batch = batch.to(self.device)

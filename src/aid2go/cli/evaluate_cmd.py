@@ -1,47 +1,70 @@
 import typer
 from pathlib import Path
 import torch
-from torch_geometric.loader import LinkNeighborLoader
+import pickle
+import pandas as pd
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
 from aid2go.data.splits import create_splits
-from aid2go.modeling.registry import get_model_class
-from aid2go.training.trainer import Trainer # Reuse evaluate method or split it out
+from aid2go.training.trainer import Trainer
 from aid2go.training.trackers import NoOpTracker
+from aid2go.eval.cafa_evaluator import CAFAEvaluator
 
-app = typer.Typer()
+app = typer.Typer(help="Certified model evaluation subcommands")
+console = Console()
 
 @app.command()
 def evaluate(
-    config_path: Path = typer.Option("configs/default.yaml", "--config", "-c"),
-    checkpoint_path: Path = typer.Option(..., "--checkpoint", "-k")
+    config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file"),
+    checkpoint_path: Path = typer.Option(..., "--checkpoint", "-k", help="Path to model checkpoint .pt")
 ):
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
     processed_dir = paths.get_processed_dir(config.data.dataset_version)
     
-    data = torch.load(processed_dir / "hetero_data.pt")
+    graph_path = processed_dir / "hetero_data.pt"
+    if not graph_path.exists():
+        typer.echo(f"Graph data not found at {graph_path}. Run preprocess graph first.")
+        raise typer.Exit(code=1)
+
+    data = torch.load(graph_path)
     _, _, test_data = create_splits(data)
     
-    # Setup model
-    tracker = NoOpTracker()
-    # Trainer can be used just for evaluation context if we refactor, but for now instantiate
-    # We need a dummy save dir
-    trainer = Trainer(config, data, tracker, paths.models)
-    trainer.model.load_state_dict(torch.load(checkpoint_path))
+    # Load IA values and GO aspect map if available
+    ia_path = processed_dir / "ia_values.pkl"
+    ia_dict = {}
+    if ia_path.exists():
+        with open(ia_path, "rb") as f:
+            ia_dict = pickle.load(f)
+
+    go_nodes_path = processed_dir / "go_nodes.csv"
+    go_aspect_map = {}
+    if go_nodes_path.exists():
+        go_df = pd.read_csv(go_nodes_path)
+        go_aspect_map = dict(zip(go_df["term"], go_df["namespace"]))
+
+    cafa_evaluator = CAFAEvaluator(ia_dict=ia_dict, go_aspect_map=go_aspect_map)
+
+    # Setup trainer & load weights
+    trainer = Trainer(config, data, NoOpTracker(), paths.models)
+    trainer.model.load_state_dict(torch.load(checkpoint_path, map_location=trainer.device))
     
-    edge_label_index = test_data["protein", "has_function", "go"].edge_label_index
-    edge_label = test_data["protein", "has_function", "go"].edge_label
+    metrics = trainer.evaluate(test_data)
     
-    loader = LinkNeighborLoader(
-        test_data,
-        num_neighbors=[10] * 2,
-        edge_label_index=(("protein", "has_function", "go"), edge_label_index),
-        edge_label=edge_label,
-        batch_size=config.training.batch_size,
-        shuffle=False,
-        neg_sampling_ratio=1.0
-    )
-    
-    metrics = trainer.evaluate(loader)
-    typer.echo(f"Test Metrics: {metrics}")
+    # Display Rich evaluation table
+    table = Table(title="Certified CAFA Model Evaluation Results", show_header=True)
+    table.add_column("Metric", style="cyan")
+    table.add_column("Score", style="green bold")
+
+    for k, v in metrics.items():
+        table.add_row(k.upper(), f"{v:.4f}")
+
+    console.print(table)
+
+    report_dir = paths.get_report_dir("evaluation")
+    report_file = cafa_evaluator.generate_report(metrics, report_dir)
+    console.print(f"✓ Saved certified evaluation report to {report_file}")

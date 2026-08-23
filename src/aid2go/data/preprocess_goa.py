@@ -163,9 +163,18 @@ def calc_ia(term, count_matrix, ontology, terms_index):
 
     return -float(np.log2(prots_with_term / prots_with_parents))
 
-def run_preprocess_goa(config: AppConfig, processed_dir: Path):
+def run_preprocess_goa(config: AppConfig, processed_dir: Path, force: bool = False):
     processed_dir.mkdir(parents=True, exist_ok=True)
     
+    goa_filtered_path = processed_dir / "goa_filtered.tsv"
+    ia_pkl_path = processed_dir / "ia_values.pkl"
+    ia_tsv_path = processed_dir / "ia_values.tsv"
+
+    if not force and goa_filtered_path.exists() and ia_pkl_path.exists() and ia_tsv_path.exists():
+        logger.info(f"[CACHE] GOA & IA artifacts already exist in {processed_dir}. Skipping GOA preprocessing. (Use force=True to recompute)")
+        print(f"✓ [CACHE] GOA & IA artifacts already exist in {processed_dir}. Skipping GOA preprocessing.")
+        return
+
     # Check if we have go_nodes.csv
     go_nodes_path = processed_dir / "go_nodes.csv"
     if not go_nodes_path.exists():

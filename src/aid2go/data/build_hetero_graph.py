@@ -9,7 +9,13 @@ from aid2go.core.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
-def build_hetero_graph(config: AppConfig, processed_dir: Path):
+def build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = False):
+    graph_path = processed_dir / "hetero_data.pt"
+    if not force and graph_path.exists():
+        logger.info(f"[CACHE] HeteroData graph already exists at {graph_path}. Skipping graph construction. (Use force=True to recompute)")
+        print(f"✓ [CACHE] HeteroData graph already exists at {graph_path}. Skipping graph construction.")
+        return torch.load(graph_path)
+
     logger.info("Building HeteroData graph...")
     
     # 1. Load GO Data

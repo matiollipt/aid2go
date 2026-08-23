@@ -100,12 +100,21 @@ def embed_go_terms(go_df: pd.DataFrame, output_path: Path, device: str = "cuda")
         pickle.dump(embeddings, f)
     logger.info(f"Saved {len(embeddings)} GO embeddings to {output_path}")
 
-def run_preprocess_go(config: AppConfig, processed_dir: Path):
+def run_preprocess_go(config: AppConfig, processed_dir: Path, force: bool = False):
     processed_dir.mkdir(parents=True, exist_ok=True)
-    obo_path = processed_dir / "go-basic.obo"
+    nodes_path = processed_dir / "go_nodes.csv"
+    edges_path = processed_dir / "go_edges.tsv"
+    emb_path = processed_dir / "go_embeddings.pkl"
     
+    if not force and nodes_path.exists() and edges_path.exists() and emb_path.exists():
+        logger.info(f"[CACHE] GO artifacts already exist in {processed_dir}. Skipping GO preprocessing. (Use force=True to recompute)")
+        print(f"✓ [CACHE] GO artifacts already exist in {processed_dir}. Skipping GO preprocessing.")
+        return
+
+    obo_path = processed_dir / "go-basic.obo"
     download_go_obo(config.data.go_obo_url, obo_path)
     go_df, _ = parse_go_dag(obo_path, processed_dir, top_n=config.data.top_n_go_terms)
     
-    embed_go_terms(go_df, processed_dir / "go_embeddings.pkl", device=config.training.device)
+    embed_go_terms(go_df, emb_path, device=config.training.device)
     logger.info("GO Preprocessing complete.")
+

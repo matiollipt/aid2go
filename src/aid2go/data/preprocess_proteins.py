@@ -172,7 +172,15 @@ def embed_proteins(sequences: dict, output_dir: Path, config: AppConfig):
         pickle.dump(list(sequences.keys()), f)
     logger.info(f"Saved all protein data in HDF5 format to {h5_path}")
 
-def run_preprocess_proteins(config: AppConfig, processed_dir: Path):
+def run_preprocess_proteins(config: AppConfig, processed_dir: Path, force: bool = False):
+    h5_path = processed_dir / "protein_data.h5"
+    index_path = processed_dir / "protein_index.pkl"
+
+    if not force and h5_path.exists() and index_path.exists():
+        logger.info(f"[CACHE] Protein artifacts already exist in {processed_dir}. Skipping protein preprocessing. (Use force=True to recompute)")
+        print(f"✓ [CACHE] Protein artifacts already exist in {processed_dir}. Skipping protein preprocessing.")
+        return
+
     goa_path = processed_dir / "goa_filtered.tsv"
     if not goa_path.exists():
         logger.error("GOA file not found. Run preprocess-goa first.")

@@ -4,24 +4,39 @@ import torch
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
 from aid2go.infer.predict import Predictor
+from aid2go.infer.summaries import export_cafa_submission
 
-app = typer.Typer()
+app = typer.Typer(help="Inference & CAFA submission table export commands")
 
 @app.command()
 def predict(
-    config_path: Path = typer.Option("configs/default.yaml", "--config", "-c"),
-    checkpoint_path: Path = typer.Option(..., "--checkpoint", "-k")
+    config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file"),
+    checkpoint_path: Path = typer.Option(..., "--checkpoint", "-k", help="Path to model checkpoint .pt"),
+    output_path: Path = typer.Option(None, "--output", "-o", help="Path to save submission tsv"),
+    apply_true_path: bool = typer.Option(True, "--true-path/--no-true-path", help="Apply True-Path Rule score propagation")
 ):
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
     processed_dir = paths.get_processed_dir(config.data.dataset_version)
     
-    data = torch.load(processed_dir / "hetero_data.pt")
-    
+    graph_path = processed_dir / "hetero_data.pt"
+    if not graph_path.exists():
+        typer.echo(f"Graph data not found at {graph_path}. Run preprocess graph first.")
+        raise typer.Exit(code=1)
+
+    data = torch.load(graph_path)
+    obo_path = processed_dir / "go-basic.obo"
+
     predictor = Predictor(config, str(checkpoint_path), data)
-    typer.echo("Running inference...")
+    typer.echo("Running inference over protein nodes...")
     
-    # In a real scenario, we would pass indices to predict
-    result = predictor.predict_all()
+    predictions = predictor.predict_scores(
+        apply_true_path=apply_true_path,
+        obo_path=obo_path
+    )
     
-    typer.echo("Inference complete.")
+    if output_path is None:
+        output_path = paths.get_report_dir("submissions") / "submission.tsv"
+
+    export_cafa_submission(predictions, output_path)
+    typer.echo(f"Inference complete. Submission saved to {output_path}")

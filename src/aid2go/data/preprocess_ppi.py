@@ -10,7 +10,13 @@ from aid2go.core.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
-def run_preprocess_ppi(config: AppConfig, processed_dir: Path):
+def run_preprocess_ppi(config: AppConfig, processed_dir: Path, force: bool = False):
+    ppi_path = processed_dir / "ppi_edge_index.pt"
+    if not force and ppi_path.exists():
+        logger.info(f"[CACHE] PPI edge index already exists at {ppi_path}. Skipping PPI preprocessing. (Use force=True to recompute)")
+        print(f"✓ [CACHE] PPI edge index already exists at {ppi_path}. Skipping PPI preprocessing.")
+        return
+
     protein_index_path = processed_dir / "protein_index.pkl"
     h5_path = processed_dir / "protein_data.h5"
     
