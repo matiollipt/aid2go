@@ -24,7 +24,7 @@ logger = get_logger("preprocess_goa")
 
 def get_default_num_workers(requested: Optional[int] = None) -> int:
     """Returns the effective number of CPU worker threads."""
-    if requested is not None and requested > 0:
+    if isinstance(requested, int) and requested > 0:
         return requested
     return max(1, min(os.cpu_count() or 4, 32))
 
@@ -372,8 +372,9 @@ def run_preprocess_goa(
         mathematical_concept="Under the True-Path Rule, P(parent) >= P(child). Information Accretion is defined as IA(t) = -log2( P(t) / P(parents(t)) ). Highly specific terms yield high IA, dynamically scaling the focal loss."
     )
 
-    workers = get_default_num_workers(num_workers or config.data.num_workers)
-    effective_chunk_size = chunk_size or config.data.gaf_chunk_size
+    requested_workers = num_workers if isinstance(num_workers, int) else config.data.num_workers
+    workers = get_default_num_workers(requested_workers)
+    effective_chunk_size = chunk_size if isinstance(chunk_size, int) and chunk_size > 0 else config.data.gaf_chunk_size
 
     processed_dir.mkdir(parents=True, exist_ok=True)
     goa_filtered_path = processed_dir / "goa_filtered.tsv"

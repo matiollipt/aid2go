@@ -104,3 +104,14 @@ def test_term_counts_and_ia():
     # Child term has positive IA
     assert ia_child > 0.0
 
+
+def test_get_default_num_workers():
+    # Test valid integers
+    assert get_default_num_workers(8) == 8
+    # Test None
+    assert get_default_num_workers(None) >= 1
+    # Test invalid / OptionInfo mock values
+    class DummyOptionInfo:
+        pass
+    assert get_default_num_workers(DummyOptionInfo()) >= 1
+

@@ -87,15 +87,24 @@ def status(config_path: Path = typer.Option("configs/default.yaml", "--config", 
 
     console.print(art_table)
 
+from typing import Optional
+
 @app.command()
 def pipeline(
     config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force recomputation of all steps")
+    force: bool = typer.Option(False, "--force", "-f", help="Force recomputation of all steps"),
+    num_workers: Optional[int] = typer.Option(None, "--num-workers", "-w", help="Number of CPU worker threads"),
+    chunk_size: Optional[int] = typer.Option(None, "--chunk-size", help="Row chunk size for GAF streaming")
 ):
     """Executes the complete end-to-end pipeline: Preprocess -> EDA -> Train -> Evaluate -> Predict."""
     console.print(Panel.fit("[bold green]Starting Aid2Go End-to-End Pipeline[/bold green]"))
 
-    config = AppConfig.from_yaml(config_path)
+    eff_config_path = config_path if isinstance(config_path, (str, Path)) else Path("configs/default.yaml")
+    eff_force = force if isinstance(force, bool) else False
+    eff_workers = num_workers if isinstance(num_workers, int) else None
+    eff_chunk_size = chunk_size if isinstance(chunk_size, int) else None
+
+    config = AppConfig.from_yaml(eff_config_path)
     paths = ProjectPaths(config.paths.root_dir)
     processed_dir = paths.get_processed_dir(config.data.dataset_version)
     
@@ -104,28 +113,33 @@ def pipeline(
 
     # 1. Preprocess
     console.print("\n[bold yellow]Step 1/5: Data Preprocessing[/bold yellow]")
-    preprocess_cmd.all(config_path=config_path, force=force)
+    preprocess_cmd.all(
+        config_path=eff_config_path,
+        force=eff_force,
+        num_workers=eff_workers,
+        chunk_size=eff_chunk_size
+    )
 
     # 2. EDA
     console.print("\n[bold yellow]Step 2/5: Exploratory Data Analysis[/bold yellow]")
-    eda_cmd.report(config_path=config_path)
+    eda_cmd.report(config_path=eff_config_path)
 
     # 3. Train
     console.print("\n[bold yellow]Step 3/5: Model Training[/bold yellow]")
-    train_cmd.run(config_path=config_path)
+    train_cmd.run(config_path=eff_config_path)
 
     # 4. Evaluate
     best_model_path = paths.models / config.tracking.experiment_name / "best_model.pt"
     if best_model_path.exists():
         console.print("\n[bold yellow]Step 4/5: Model Evaluation[/bold yellow]")
-        evaluate_cmd.evaluate(config_path=config_path, checkpoint_path=best_model_path)
+        evaluate_cmd.evaluate(config_path=eff_config_path, checkpoint_path=best_model_path)
     else:
         console.print("[yellow]Skipping evaluation: best_model.pt not found.[/yellow]")
 
     # 5. Predict
     if best_model_path.exists():
         console.print("\n[bold yellow]Step 5/5: Inference & Submission Table Generation[/bold yellow]")
-        predict_cmd.predict(config_path=config_path, checkpoint_path=best_model_path)
+        predict_cmd.predict(config_path=eff_config_path, checkpoint_path=best_model_path)
 
     console.print(Panel.fit("[bold green]✅ End-to-End Pipeline Finished Successfully![/bold green]"))
 
