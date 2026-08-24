@@ -1,67 +1,125 @@
-# Aid2Go
+# Aid2Go: Protein Function Prediction Framework
 
-Aid2Go is a Python package for protein function prediction using Heterogeneous Graph Neural Networks.
-It predicts Gene Ontology (GO) terms for proteins by leveraging a graph of:
-- Protein-Protein Interactions (PPI)
-- GO Hierarchy (is_a relationships)
-- Protein-GO Annotations (experimental evidence)
+Aid2Go is a production-grade framework for protein function prediction using Heterogeneous Graph Neural Networks (GNNs). It predicts Gene Ontology (GO) terms across all three biological subontologies (Biological Process, Molecular Function, and Cellular Component) by learning jointly over:
+- **Protein Structural & Sequence Embeddings** (ESM-2 / Contact Graphs)
+- **Protein-Protein Interaction & Similarity Networks** (FAISS KNN on ESM-2 embeddings)
+- **Gene Ontology DAG Hierarchy** (`is_a` & `part_of` relations)
+- **Protein-GO Functional Annotations** (GAF filtered by experimental evidence)
+- **Information Accretion ($IA$) node weighting & True-Path rule constraints**
+
+---
+
+## Features
+
+- **End-to-End Pipeline**: Preprocessing, EDA, GNN training, True-Path post-processing, certified CAFA evaluation, and official CAFA competition submission generation.
+- **Smart Resource & Artifact Caching**: Automatically skips expensive operations (GAF downloads/parsing, ESM-2 transformer forward passes, FAISS index construction) if processed artifacts already exist, with `--force` overrides.
+- **Streamlined Rich & Typer CLI**: Rich terminal tables, spinners, progress bars, hardware diagnostic inspector (`aid2go status`), and a one-shot pipeline runner (`aid2go pipeline`).
+- **Certified CAFA Evaluation**: Computes $F_{\max}$, Information Accretion weighted $S_{\max}$, and Micro/Macro AUPR per subontology aspect (BP, CC, MF) following CAFA competition protocols (*Radivojac et al., 2013*; *Zhou et al., 2019*).
+- **Hierarchical Monotonicity Post-Processing**: Enforces the True-Path rule $P(\text{parent}) \ge P(\text{child})$ via topological score propagation through the GO DAG.
+
+---
 
 ## Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/maitiollipt/aid2go.git
+cd aid2go
+
+# Install dependencies using uv or pip
+uv sync
+# or
 pip install -e .
 ```
 
+---
+
 ## Quickstart
 
-1. **Configuration**: Edit `configs/default.yaml` to set your paths and parameters.
-2. **Preprocessing**:
-   ```bash
-   # Download and process GO Ontology
-   aid2go preprocess go
-   
-   # Download and filter GO Annotations (GOA)
-   aid2go preprocess goa
-   
-   # Fetch and embed Protein Sequences (ProtBERT)
-   aid2go preprocess proteins
-   
-   # Process PPI network
-   aid2go preprocess ppi
-   
-   # Build the Heterogeneous Graph
-   aid2go preprocess graph
-   ```
-3. **Training**:
-   ```bash
-   aid2go train run --config configs/default.yaml
-   ```
-4. **Evaluation**:
-   ```bash
-   aid2go evaluate --checkpoint models/aid2go_default/best_model.pt
-   ```
+### 1. Check System Status & Cached Artifacts
+Inspect your hardware (CUDA GPU, PyTorch version) and existing processed artifacts:
+```bash
+aid2go status
+```
 
-## CLI Commands
+### 2. Run the End-to-End Pipeline
+Run all pipeline steps (Preprocess $\to$ EDA $\to$ Train $\to$ Evaluate $\to$ Export CAFA Submission):
+```bash
+aid2go pipeline --config configs/default.yaml
+```
 
-The CLI is the main entrypoint:
-- `aid2go preprocess [go|goa|proteins|ppi|graph]`: Data preparation steps.
-- `aid2go train run`: Train a model.
-- `aid2go predict`: Run inference.
-- `aid2go eda report`: Generate data statistics.
+---
 
-## Data Structure
+## CLI Reference
 
-Data is organized in `data/`:
-- `data/raw`: Raw downloads.
-- `data/processed/<version>`: Processed artifacts (embeddings, graph objects).
+### `aid2go status`
+Displays hardware diagnostics, CUDA GPU availability, dataset version, and cached file status.
 
-## Models
+### `aid2go preprocess`
+Modular data preparation commands with automatic artifact caching:
+- `aid2go preprocess all [--force]`: Run all preprocessing stages sequentially.
+- `aid2go preprocess go [--force]`: Download GO OBO, filter top terms, and compute BERT definition embeddings.
+- `aid2go preprocess goa [--force]`: Filter GAF annotations by evidence codes and compute Information Accretion ($IA$).
+- `aid2go preprocess proteins [--force]`: Retrieve sequences from UniProt and compute ESM-2 embeddings stored in HDF5 (`protein_data.h5`).
+- `aid2go preprocess ppi [--force]`: Build sequence-similarity KNN network using FAISS.
+- `aid2go preprocess graph [--force]`: Assemble PyG `HeteroData` graph.
 
-- **Baseline**: GraphSAGE-based HeteroGNN.
-- **Smart**: GAT-based HeteroGNN with focal loss.
+### `aid2go eda`
+Generate exploratory data analysis summary statistics and distribution plots:
+```bash
+aid2go eda report --config configs/default.yaml
+```
 
-Select the model in `configs/default.yaml`:
-```yaml
-model:
-  name: "smart"
+### `aid2go train`
+Train baseline or smart heterogeneous GNN models:
+```bash
+aid2go train run --config configs/default.yaml
+```
+
+### `aid2go evaluate`
+Evaluate model checkpoints on test splits with certified CAFA metrics ($F_{\max}$, $S_{\max}$, AUPR per aspect):
+```bash
+aid2go evaluate --config configs/default.yaml --checkpoint models/aid2go_default/best_model.pt
+```
+
+### `aid2go predict`
+Run link scoring, apply True-Path rule propagation, and export official 3-column CAFA submission tables (`Protein_ID \t GO_ID \t Score`):
+```bash
+aid2go predict --config configs/default.yaml --checkpoint models/aid2go_default/best_model.pt --output reports/submissions/submission.tsv
+```
+
+### `aid2go explain`
+Explain specific protein-GO predictions using GNNExplainer node attribution:
+```bash
+aid2go explain link --protein-idx 0 --go-idx 5 --config configs/default.yaml
+```
+
+---
+
+## Directory Structure
+
+```text
+aid2go/
+├── configs/                  # YAML experiment configurations (default, baseline, smart)
+├── src/aid2go/
+│   ├── cli/                  # Typer & Rich CLI subcommands (app, preprocess, train, eval, predict, eda, explain)
+│   ├── core/                 # AppConfig schemas, paths, and type definitions
+│   ├── data/                 # Data preprocessing pipelines & HeteroData graph builder
+│   ├── eval/                 # Certified CAFA evaluator & metric sweeps (Fmax, Smax, AUPR)
+│   ├── explain/              # GNNExplainer link attribution
+│   ├── infer/                # Predictor, True-Path postprocessing, and CAFA submission exporter
+│   ├── modeling/             # Smart (HGT) & Baseline (GraphSAGE) models, registry, and focal loss
+│   ├── training/             # Trainer, checkpointing, and MLflow trackers
+│   └── viz/                  # EDA & visualization helpers
+├── tests/                    # Comprehensive pytest test suite
+└── reports/                  # Generated plots, metrics, and CAFA submission files
+```
+
+---
+
+## Testing
+
+Run the full pytest suite:
+```bash
+uv run pytest
 ```
