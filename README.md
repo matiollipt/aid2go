@@ -98,6 +98,8 @@ aid2go explain link --protein-idx 0 --go-idx 5 --config configs/default.yaml
 
 ## Directory Structure
 
+### Project Layout
+
 ```text
 aid2go/
 ├── configs/                  # YAML experiment configurations (default, baseline, smart)
@@ -113,6 +115,30 @@ aid2go/
 │   └── viz/                  # EDA & visualization helpers
 ├── tests/                    # Comprehensive pytest test suite
 └── reports/                  # Generated plots, metrics, and CAFA submission files
+```
+
+### Data & Processed Artifacts Layout
+
+```text
+aid2go/
+└── data/
+    ├── raw/                               # Raw downloads (FASTA, raw OBO, PDB structures)
+    │   └── pdb/                           # Optional local AlphaFold / PDB coordinate files ({uniprot_id}.pdb)
+    │
+    └── processed/
+        └── v1/                            # Processed artifacts for dataset version "v1"
+            ├── go-basic.obo               # Gene Ontology OBO file
+            ├── go_nodes.csv               # Top GO terms with degree metadata
+            ├── go_edges.tsv               # GO DAG relationship edges
+            ├── go_embeddings.pkl          # 768-dim BERT definition embeddings
+            ├── goa_uniprot_gcrp.gaf.gz    # Downloaded GAF annotation file
+            ├── goa_filtered.tsv           # Filtered annotations by evidence code (EXP, IDA, etc.)
+            ├── ia_values.pkl              # Information Accretion (IA) dictionary
+            ├── ia_values.tsv              # Information Accretion TSV table
+            ├── protein_data.h5            # HDF5 archive (ESM-2 embeddings & contact graphs)
+            ├── protein_index.pkl          # Protein ID index list
+            ├── ppi_edge_index.pt          # FAISS KNN sequence-similarity graph
+            └── hetero_data.pt             # Compiled PyG HeteroData multi-relational graph
 ```
 
 ---
