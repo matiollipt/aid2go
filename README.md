@@ -19,6 +19,20 @@ Aid2Go is a production-grade framework for protein function prediction using Het
 
 ---
 
+## Data Sources & Fetched Files
+
+| Source / Artifact | Download Link & Source | Nature of Data | Purpose in Aid2Go Pipeline | Processing Method |
+| :--- | :--- | :--- | :--- | :--- |
+| **Gene Ontology OBO** (`go-basic.obo`) | [OBO Foundry GO](https://purl.obolibrary.org/obo/go/go-basic.obo) | Structured ontology DAG containing GO terms, definitions, and `is_a`/`part_of` relations across BPO, CCO, and MFO. | Defines the ontology graph structure and text descriptions for GO node features. | Parsed via `obonet` into a `networkx.DiGraph`. Top 1000 terms by degree are filtered (`go_nodes.csv`), DAG edges extracted (`go_edges.tsv`), and definitions embedded into 768-dim vectors using BERT (`go_embeddings.pkl`). |
+| **Gene Ontology Annotations (GOA)** (`goa_uniprot_gcrp.gaf.gz`) | [EBI GOA UniProt](http://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_gcrp.gaf.gz) | Gene Association File (GAF 2.2) linking UniProt accession IDs to GO terms with experimental evidence codes. | Provides ground truth bipartite annotation edges (`protein` $\leftrightarrow$ `go`) and empirical term frequencies for Information Accretion ($IA$). | Streamed in chunks; filtered to high-confidence experimental codes (`EXP`, `IDA`, `IPI`, `IMP`, `IGI`, `IEP`, `TAS`, `IC`) and top proteins (`goa_filtered.tsv`). Propagated through the GO DAG to calculate per-term Information Accretion ($IA$) weights (`ia_values.pkl`). |
+| **UniProtKB Protein Sequences** | [UniProt REST API](https://rest.uniprot.org/uniprotkb/search) | Amino acid FASTA sequences for annotated UniProtKB entries. | Source sequences used to compute evolutionary embeddings and contact graphs. | Batched REST queries fetch FASTA sequences. Sequences are filtered by length ($\ge 50$ aa) and tokenized for downstream transformer encoders. |
+| **ESM-2 Pretrained Transformer** | [HuggingFace Hub](https://huggingface.co/facebook/esm2_t33_650M_UR50D) | 650M-parameter protein language model (`esm2_t33_650M_UR50D`) trained on UniRef50. | Deep contextualized sequence representations capturing evolutionary, biochemical, and structural features. | Batched forward passes extract residue embeddings. Mean-pooled vectors (1280-dim) and per-residue tensors are saved in a unified HDF5 archive (`protein_data.h5`). |
+| **BERT Definition Encoder** | [HuggingFace Hub](https://huggingface.co/bert-base-uncased) | 110M-parameter English NLP transformer model (`bert-base-uncased`). | Semantic language model encoding textual definitions and descriptions of GO terms into dense vectors. | Tokenizes GO definition strings and mean-pools token hidden states to produce 768-dim GO initial node features. |
+| **AlphaFold DB / PDB Coordinates** *(Optional)* | [AlphaFold Database](https://alphafold.ebi.ac.uk/) | Atomic coordinate files (.pdb / .cif) of predicted 3D protein structures. | Spatial structural coordinates for residue contact graph construction. | Parsed C-alpha ($C_\alpha$) coordinate vectors; distance matrices ($d \le 8.0$Å) generate sparse contact adjacency maps saved in HDF5 (`contact_edges`). Falls back to sequence adjacency if PDB is unavailable. |
+
+
+---
+
 ## Installation
 
 ```bash
