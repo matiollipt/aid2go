@@ -63,8 +63,12 @@ src/aid2go/viz/__init__.py
 src/aid2go/viz/eda.py
 src/aid2go/viz/go_viz.py
 src/aid2go/viz/protein_go.py
+tests/test_caching.py
+tests/test_cafa_evaluator.py
+tests/test_cafa_exporter.py
 tests/test_graph_builder.py
 tests/test_inference_smoke.py
 tests/test_parsers.py
+tests/test_postprocess.py
 tests/test_splits.py
 tests/test_training_smoke.py
