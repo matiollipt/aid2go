@@ -15,6 +15,7 @@ from aid2go.cli import (
 )
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
+from aid2go.core.logging import setup_pipeline_logging
 
 app = typer.Typer(
     help="Aid2Go: Protein Function Prediction Framework",
@@ -72,6 +73,8 @@ def status(config_path: Path = typer.Option("configs/default.yaml", "--config", 
         ("Protein Index", processed_dir / "protein_index.pkl"),
         ("PPI Edge Index", processed_dir / "ppi_edge_index.pt"),
         ("HeteroData Graph", processed_dir / "hetero_data.pt"),
+        ("Dataset Manifest", processed_dir / "dataset_manifest.json"),
+        ("Companion Log", processed_dir / "pipeline.log"),
     ]
 
     for label, path in artifacts:
@@ -94,6 +97,10 @@ def pipeline(
 
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
+    processed_dir = paths.get_processed_dir(config.data.dataset_version)
+    
+    # Initialize companion logger for the entire pipeline
+    setup_pipeline_logging(processed_dir / "pipeline.log")
 
     # 1. Preprocess
     console.print("\n[bold yellow]Step 1/5: Data Preprocessing[/bold yellow]")
