@@ -13,6 +13,16 @@ __pycache__/
 venv/
 ENV/
 env/
+data/
+reports/
+models/
+outputs/
+mlruns/
+*.h5
+*.tsv
+*.csv
+*.pt
+*.pkl
 Active4j-boot/
 build/
 develop-eggs/

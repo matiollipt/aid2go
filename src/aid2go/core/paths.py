@@ -4,8 +4,8 @@ from typing import Optional
 class ProjectPaths:
     def __init__(self, root_dir: Optional[str | Path] = None):
         if root_dir is None:
-            # Default to repo root if not specified (assuming src/aid2go/core/paths.py location)
-            self.root = Path(__file__).resolve().parent.parent.parent.parent.parent
+            # Default to repo root if not specified (src/aid2go/core/paths.py -> 4 levels up to repo root)
+            self.root = Path(__file__).resolve().parent.parent.parent.parent
         else:
             self.root = Path(root_dir)
 
