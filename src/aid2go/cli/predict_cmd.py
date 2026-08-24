@@ -1,10 +1,7 @@
-import typer
 from pathlib import Path
-import torch
+import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.infer.predict import Predictor
-from aid2go.infer.summaries import export_cafa_submission
 
 app = typer.Typer(help="Inference & CAFA submission table export commands")
 
@@ -15,6 +12,10 @@ def predict(
     output_path: Path = typer.Option(None, "--output", "-o", help="Path to save submission tsv"),
     apply_true_path: bool = typer.Option(True, "--true-path/--no-true-path", help="Apply True-Path Rule score propagation")
 ):
+    import torch
+    from aid2go.infer.predict import Predictor
+    from aid2go.infer.summaries import export_cafa_submission
+
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
     processed_dir = paths.get_processed_dir(config.data.dataset_version)

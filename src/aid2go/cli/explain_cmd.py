@@ -1,13 +1,9 @@
-import typer
 from pathlib import Path
-import torch
+import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.explain.explain_links import explain_protein_go_link, get_top_explanatory_nodes
-from aid2go.training.trainer import Trainer
-from aid2go.training.trackers import NoOpTracker
 
-app = typer.Typer()
+app = typer.Typer(help="GNN Explainer commands")
 
 @app.command()
 def link(
@@ -16,6 +12,11 @@ def link(
     config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file"),
     model_path: Path = typer.Option(None, "--model-path", "-m", help="Path to trained model weights (.pt)")
 ):
+    import torch
+    from aid2go.explain.explain_links import explain_protein_go_link, get_top_explanatory_nodes
+    from aid2go.training.trainer import Trainer
+    from aid2go.training.trackers import NoOpTracker
+
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
     

@@ -1,27 +1,26 @@
-import typer
 from pathlib import Path
-import torch
-import pickle
-import pandas as pd
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-
+import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.data.splits import create_splits
-from aid2go.training.trainer import Trainer
-from aid2go.training.trackers import NoOpTracker
-from aid2go.eval.cafa_evaluator import CAFAEvaluator
 
 app = typer.Typer(help="Certified model evaluation subcommands")
-console = Console()
 
 @app.command()
 def evaluate(
     config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file"),
     checkpoint_path: Path = typer.Option(..., "--checkpoint", "-k", help="Path to model checkpoint .pt")
 ):
+    import torch
+    import pickle
+    import pandas as pd
+    from rich.console import Console
+    from rich.table import Table
+    from aid2go.data.splits import create_splits
+    from aid2go.training.trainer import Trainer
+    from aid2go.training.trackers import NoOpTracker
+    from aid2go.eval.cafa_evaluator import CAFAEvaluator
+
+    console = Console()
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
     processed_dir = paths.get_processed_dir(config.data.dataset_version)

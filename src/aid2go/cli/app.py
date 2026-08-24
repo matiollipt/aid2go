@@ -1,7 +1,6 @@
-import typer
 import sys
 from pathlib import Path
-import torch
+import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -34,6 +33,8 @@ app.add_typer(explain_cmd.app, name="explain", help="GNN explainer commands")
 @app.command()
 def status(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c")):
     """Displays system status, CUDA environment, and cached dataset artifacts."""
+    import torch
+
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
     processed_dir = paths.get_processed_dir(config.data.dataset_version)
@@ -93,7 +94,6 @@ def pipeline(
 
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
-    processed_dir = paths.get_processed_dir(config.data.dataset_version)
 
     # 1. Preprocess
     console.print("\n[bold yellow]Step 1/5: Data Preprocessing[/bold yellow]")

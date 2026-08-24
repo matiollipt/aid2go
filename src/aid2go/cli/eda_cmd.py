@@ -1,16 +1,17 @@
-import typer
 from pathlib import Path
-import torch
-import json
-from torch_geometric.utils import degree
+import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.viz.eda import plot_ppi_degree, plot_go_frequency
 
-app = typer.Typer()
+app = typer.Typer(help="Exploratory Data Analysis commands")
 
 @app.command()
 def report(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c")):
+    import json
+    import torch
+    from torch_geometric.utils import degree
+    from aid2go.viz.eda import plot_ppi_degree, plot_go_frequency
+
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
     processed_dir = paths.get_processed_dir(config.data.dataset_version)

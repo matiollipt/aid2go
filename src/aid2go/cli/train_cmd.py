@@ -1,17 +1,18 @@
-import typer
 from pathlib import Path
-import torch
+import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.data.splits import create_splits
-from aid2go.training.trainer import Trainer
-from aid2go.training.mlflow_tracker import MLFlowTracker
-from aid2go.training.trackers import NoOpTracker
 
-app = typer.Typer()
+app = typer.Typer(help="Model training subcommands")
 
 @app.command()
-def run(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c")):
+def run(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file")):
+    import torch
+    from aid2go.data.splits import create_splits
+    from aid2go.training.trainer import Trainer
+    from aid2go.training.mlflow_tracker import MLFlowTracker
+    from aid2go.training.trackers import NoOpTracker
+
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
     
@@ -26,9 +27,6 @@ def run(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c
     
     # Create splits
     train_data, val_data, test_data = create_splits(data)
-    
-    # Save splits just in case? Or re-generate (seeds must be fixed)
-    # Trainer
     
     if config.tracking.enabled:
         tracker = MLFlowTracker(
