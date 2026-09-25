@@ -18,12 +18,12 @@ def test_cafa_metrics_calculation():
 
 def test_cafa_evaluator(tmp_path):
     evaluator = CAFAEvaluator(
-        ia_dict={"GO:001": 1.5, "GO:002": 2.0},
-        go_aspect_map={"GO:001": "biological_process", "GO:002": "cellular_component"}
+        ia_dict={"GO:0000001": 1.5, "GO:0000002": 2.0},
+        go_aspect_map={"GO:0000001": "biological_process", "GO:0000002": "cellular_component"}
     )
     y_true = np.array([[1, 0], [0, 1]])
     y_score = np.array([[0.9, 0.2], [0.1, 0.85]])
-    go_terms = ["GO:001", "GO:002"]
+    go_terms = ["GO:0000001", "GO:0000002"]
 
     metrics = evaluator.evaluate(y_true, y_score, go_terms=go_terms)
     assert "fmax" in metrics

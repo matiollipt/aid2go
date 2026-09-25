@@ -1,40 +1,23 @@
 import logging
 import json
-import os
-import tempfile
 from pathlib import Path
 import pandas as pd
 import networkx as nx
 import torch
 import pickle
-import requests
 from obonet import read_obo
 from transformers import BertTokenizer, BertModel
 from aid2go.cli.progress import track_items
 
 from aid2go.core.config import AppConfig
 from aid2go.core.device import resolve_device
+from aid2go.data.downloads import download_file_resumable
 
 logger = logging.getLogger(__name__)
 
 def download_go_obo(url: str, output_path: Path, replace: bool = False):
-    if output_path.exists() and not replace:
-        logger.info(f"GO OBO exists at {output_path}")
-        return
-    
-    logger.info(f"Downloading GO OBO from {url}")
-    fd, temporary = tempfile.mkstemp(prefix=".go-basic.", dir=output_path.parent)
-    os.close(fd)
-    try:
-        with requests.get(url, stream=True, timeout=(15, 120)) as response:
-            response.raise_for_status()
-            with open(temporary, "wb") as destination:
-                for chunk in response.iter_content(chunk_size=8192):
-                    destination.write(chunk)
-        os.replace(temporary, output_path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+    logger.info("Obtaining GO OBO from %s", url)
+    download_file_resumable(url, output_path, force=replace, desc="GO OBO")
 
 def parse_go_dag(obo_path: Path, output_dir: Path, top_n: int):
     logger.info("Parsing GO DAG...")

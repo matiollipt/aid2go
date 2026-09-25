@@ -25,6 +25,8 @@ class DataConfig(BaseModel):
     # Prototyping and graph parameters
     top_n_go_terms: int = 1000
     max_proteins: int = 5000
+    gaf_chunk_size: int = 2_000_000
+    num_workers: Optional[int] = None
     
     # Protein sequence model and embedding storage
     esm_model_name: str = "facebook/esm2_t33_650M_UR50D"

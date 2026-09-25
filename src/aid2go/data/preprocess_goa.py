@@ -9,6 +9,7 @@ import os
 import pickle
 import shutil
 import sqlite3
+import subprocess
 import tempfile
 import zlib
 from collections import Counter, defaultdict
@@ -22,6 +23,8 @@ import requests
 from aid2go.cli.progress import make_progress
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
+from aid2go.data.goa_compat import (get_default_num_workers, propagate_terms,
+                                    term_counts, calc_ia)
 
 logger = logging.getLogger(__name__)
 SCAN_LINES = 100_000
@@ -101,11 +104,17 @@ def verify_gzip(path: Path):
                         detail=f"{path.stat().st_size:,} compressed bytes")
 
 
-def _scan_gaf(path, codes, selected_terms, progress, task):
+def _scan_gaf(path, codes, selected_terms, progress, task, num_workers=None):
     chunks = rows = matches = 0
+    pigz = shutil.which("pigz") if path.suffix == ".gz" else None
+    worker_count = get_default_num_workers(num_workers)
     with open(path, "rb") as raw:
-        stream = gzip.GzipFile(fileobj=raw) if path.suffix == ".gz" else raw
-        with stream:
+        process = (subprocess.Popen([pigz, "-dc", "-p", str(worker_count), str(path)],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                   if pigz else None)
+        stream = process.stdout if process else (
+            gzip.GzipFile(fileobj=raw) if path.suffix == ".gz" else raw)
+        try:
             for line in stream:
                 if line.startswith(b"!"):
                     continue
@@ -119,8 +128,17 @@ def _scan_gaf(path, codes, selected_terms, progress, task):
                         yield fields[1].decode("utf-8"), term
                 if rows % SCAN_LINES == 0:
                     chunks += 1
-                    progress.update(task, completed=raw.tell(),
+                    progress.update(task, completed=raw.tell() if not process else None,
                                     detail=f"{chunks:,} chunks · {rows:,} rows · {matches:,} matches")
+        finally:
+            if stream is not raw:
+                stream.close()
+            if process:
+                code = process.wait()
+                error = process.stderr.read().decode("utf-8", errors="replace")
+                process.stderr.close()
+                if code:
+                    raise RuntimeError(f"pigz failed while reading {path}: {error.strip()}")
     if rows % SCAN_LINES:
         chunks += 1
     progress.update(task, completed=path.stat().st_size,
@@ -128,7 +146,8 @@ def _scan_gaf(path, codes, selected_terms, progress, task):
 
 
 def filter_goa(gaf_path: Path, output_path: Path, evidence_codes: list[str],
-               selected_go_terms: set[str] | None = None, max_proteins: int | None = None):
+               selected_go_terms: set[str] | None = None, max_proteins: int | None = None,
+               chunk_size: int | None = None, num_workers: int | None = None):
     """Select proteins by distinct terms and write one row per protein-GO pair.
 
     A temporary disk-backed table keeps memory bounded even for the complete
@@ -151,9 +170,11 @@ def filter_goa(gaf_path: Path, output_path: Path, evidence_codes: list[str],
                        "PRIMARY KEY (protein, term)) WITHOUT ROWID")
             task = progress.add_task("GOA unique pairs", total=size, detail="0 rows")
             batch = []
-            for pair in _scan_gaf(gaf_path, codes, selected_go_terms, progress, task):
+            batch_limit = min(max(1, chunk_size or 50_000), 50_000)
+            for pair in _scan_gaf(gaf_path, codes, selected_go_terms, progress, task,
+                                  num_workers=num_workers):
                 batch.append(pair)
-                if len(batch) >= 50_000:
+                if len(batch) >= batch_limit:
                     db.executemany("INSERT OR IGNORE INTO pairs VALUES (?, ?)", batch)
                     db.commit()
                     batch.clear()
@@ -240,7 +261,8 @@ def calculate_ia(goa_path: Path, ontology, selected_terms: set[str], progress):
     }
 
 
-def run_preprocess_goa(config: AppConfig, processed_dir: Path, force: bool = False):
+def run_preprocess_goa(config: AppConfig, processed_dir: Path, force: bool = False,
+                       num_workers: int | None = None, chunk_size: int | None = None):
     processed_dir.mkdir(parents=True, exist_ok=True)
     filtered = processed_dir / "goa_filtered.tsv"
     ia_pkl = processed_dir / "ia_values.pkl"
@@ -275,7 +297,9 @@ def run_preprocess_goa(config: AppConfig, processed_dir: Path, force: bool = Fal
     codes = [code for group in config.data.evidence_codes.values() for code in group]
     if not codes:
         codes = ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "TAS", "IC"]
-    filter_goa(gaf, filtered, codes, selected_terms, config.data.max_proteins)
+    filter_goa(gaf, filtered, codes, selected_terms, config.data.max_proteins,
+               chunk_size=chunk_size or config.data.gaf_chunk_size,
+               num_workers=num_workers if isinstance(num_workers, int) else config.data.num_workers)
     if config.data.dataset_version.startswith("v2"):
         # IA belongs to the sequence-valid cohort, which is only known after
         # UniProt retrieval in preprocess_proteins.

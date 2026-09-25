@@ -15,6 +15,8 @@ dependencies = [
     "numpy",
     "networkx",
     "scikit-learn",
+    "scipy",
+    "joblib",
     "typer",
     "pydantic>=2.0",
     "pyyaml",
@@ -32,6 +34,9 @@ dependencies = [
 
 [project.scripts]
 aid2go = "aid2go.cli.app:app"
+
+[dependency-groups]
+dev = ["pytest", "requests-mock"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

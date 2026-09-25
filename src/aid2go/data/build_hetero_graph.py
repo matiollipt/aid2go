@@ -1,4 +1,6 @@
 import logging
+import json
+import time
 from pathlib import Path
 import torch
 import pickle
@@ -9,6 +11,22 @@ from aid2go.core.config import AppConfig
 from aid2go.core.serialization import load_graph
 
 logger = logging.getLogger(__name__)
+
+
+def _write_dataset_manifest(config: AppConfig, processed_dir: Path, data: HeteroData) -> None:
+    """Keep a readable snapshot alongside the fingerprinted graph artifact."""
+    manifest = {
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "dataset_version": config.data.dataset_version,
+        "num_proteins": data["protein"].num_nodes,
+        "num_go_terms": data["go"].num_nodes,
+        "protein_feature_dim": data["protein"].x.shape[1],
+        "go_feature_dim": data["go"].x.shape[1],
+        "edge_counts": {"___".join(edge_type): int(data[edge_type].edge_index.shape[1])
+                        for edge_type in data.edge_types},
+        "config_snapshot": config.model_dump(mode="json"),
+    }
+    (processed_dir / "dataset_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 def build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = False):
     graph_path = processed_dir / "hetero_data.pt"
@@ -22,7 +40,10 @@ def build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = Fal
     ):
         logger.info(f"[CACHE] HeteroData graph already exists at {graph_path}. Skipping graph construction. (Use force=True to recompute)")
         print(f"✓ [CACHE] HeteroData graph already exists at {graph_path}. Skipping graph construction.")
-        return load_graph(graph_path)
+        data = load_graph(graph_path)
+        if not (processed_dir / "dataset_manifest.json").exists():
+            _write_dataset_manifest(config, processed_dir, data)
+        return data
 
     logger.info("Building HeteroData graph...")
     
@@ -131,6 +152,7 @@ def build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = Fal
         data["go", "function_of", "protein"].edge_index = torch.empty((2, 0), dtype=torch.long)
         
     torch.save(data, processed_dir / "hetero_data.pt")
+    _write_dataset_manifest(config, processed_dir, data)
     record_stage("graph", config, processed_dir)
     logger.info(f"HeteroData saved to {processed_dir / 'hetero_data.pt'}")
     return data

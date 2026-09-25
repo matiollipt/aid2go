@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -94,16 +95,24 @@ def status(config_path: Path = typer.Option("configs/default.yaml", "--config", 
 @app.command()
 def pipeline(
     config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force recomputation of all steps")
+    force: bool = typer.Option(False, "--force", "-f", help="Force recomputation of all steps"),
+    num_workers: Optional[int] = typer.Option(None, "--num-workers", "-w"),
+    chunk_size: Optional[int] = typer.Option(None, "--chunk-size"),
 ):
     """Executes the complete end-to-end pipeline: Preprocess -> EDA -> Train -> Evaluate -> Predict."""
     console.print(Panel.fit("[bold green]Starting Aid2Go End-to-End Pipeline[/bold green]"))
 
+    config_path = (Path(config_path) if isinstance(config_path, (str, Path))
+                   else Path("configs/default.yaml"))
+    force = force if isinstance(force, bool) else False
+    num_workers = num_workers if isinstance(num_workers, int) else None
+    chunk_size = chunk_size if isinstance(chunk_size, int) else None
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
 
     with make_progress() as progress:
-        preprocess_cmd.all(config_path=config_path, force=force)
+        preprocess_cmd.all(config_path=config_path, force=force,
+                           num_workers=num_workers, chunk_size=chunk_size)
         stages = [
             ("Exploratory analysis", lambda: eda_cmd.report(config_path=config_path)),
             ("Model training", lambda: train_cmd.run(config_path=config_path)),
