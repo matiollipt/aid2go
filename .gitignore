@@ -13,7 +13,7 @@ __pycache__/
 venv/
 ENV/
 env/
-data/
+/data/
 reports/
 models/
 outputs/

@@ -1,6 +1,6 @@
 import torch
 from torch_geometric.data import HeteroData
-from torch_geometric.transforms import RandomLinkSplit
+from aid2go.data.splits import create_splits
 from aid2go.core.config import AppConfig
 from aid2go.training.trainer import Trainer
 from aid2go.training.trackers import NoOpTracker
@@ -22,14 +22,7 @@ def synthetic_data():
     data["go", "function_of", "protein"].edge_index = edge_index.flip(0)
     data["go"].ia = torch.ones(10, 1)
     
-    transform = RandomLinkSplit(
-        num_val=0.1, num_test=0.1,
-        edge_types=[("protein", "has_function", "go")],
-        rev_edge_types=[("go", "function_of", "protein")],
-        is_undirected=False,
-        add_negative_train_samples=False
-    )
-    return transform(data)[0]
+    return create_splits(data)[0]
 
 def test_training_one_epoch(synthetic_data, tmp_path):
     config = AppConfig()
@@ -55,3 +48,5 @@ def test_training_one_epoch(synthetic_data, tmp_path):
     trainer.fit(synthetic_data, val_data)
     
     assert (tmp_path / "last_model.pt").exists()
+    assert (tmp_path / "training_history.csv").exists()
+    assert trainer.optimizer_steps == 1

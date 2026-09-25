@@ -6,15 +6,23 @@ import h5py
 import pandas as pd
 from torch_geometric.data import HeteroData, Data
 from aid2go.core.config import AppConfig
+from aid2go.core.serialization import load_graph
 
 logger = logging.getLogger(__name__)
 
 def build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = False):
     graph_path = processed_dir / "hetero_data.pt"
-    if not force and graph_path.exists():
+    from aid2go.data.cache import stage_current, record_stage
+    if config.data.dataset_version.startswith("v2") and not all(
+        stage_current(stage, config, processed_dir) for stage in ("goa", "proteins", "ppi")
+    ):
+        raise RuntimeError("Upstream v2 preprocessing is stale; run preprocess all first")
+    if not force and graph_path.exists() and (
+        not config.data.dataset_version.startswith("v2") or stage_current("graph", config, processed_dir)
+    ):
         logger.info(f"[CACHE] HeteroData graph already exists at {graph_path}. Skipping graph construction. (Use force=True to recompute)")
         print(f"✓ [CACHE] HeteroData graph already exists at {graph_path}. Skipping graph construction.")
-        return torch.load(graph_path)
+        return load_graph(graph_path)
 
     logger.info("Building HeteroData graph...")
     
@@ -113,7 +121,9 @@ def build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = Fal
             edge_index_goa.append([protein_map[pid], go_map[gid]])
             
     if edge_index_goa:
-        edge_index = torch.tensor(edge_index_goa, dtype=torch.long).t().contiguous()
+        edge_index = torch.unique(
+            torch.tensor(edge_index_goa, dtype=torch.long).t().contiguous(), dim=1
+        )
         data["protein", "has_function", "go"].edge_index = edge_index
         data["go", "function_of", "protein"].edge_index = edge_index.flip(0)
     else:
@@ -121,5 +131,6 @@ def build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = Fal
         data["go", "function_of", "protein"].edge_index = torch.empty((2, 0), dtype=torch.long)
         
     torch.save(data, processed_dir / "hetero_data.pt")
+    record_stage("graph", config, processed_dir)
     logger.info(f"HeteroData saved to {processed_dir / 'hetero_data.pt'}")
     return data

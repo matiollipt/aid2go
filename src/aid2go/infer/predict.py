@@ -3,9 +3,10 @@ from typing import Dict, Optional
 from pathlib import Path
 import torch
 import pandas as pd
-from tqdm.auto import tqdm
 
 from aid2go.core.config import AppConfig
+from aid2go.core.device import resolve_device
+from aid2go.core.serialization import load_model_weights
 from aid2go.modeling.registry import get_model_class
 from aid2go.infer.postprocess import enforce_true_path_rule, load_go_dag
 
@@ -14,11 +15,15 @@ logger = logging.getLogger(__name__)
 class Predictor:
     def __init__(self, config: AppConfig, checkpoint_path: str, data):
         self.config = config
-        self.device = torch.device(config.training.device)
+        self.device = resolve_device(config.training.device)
         self.data = data
         
         # Build model kwargs matching Trainer setup
-        model_kwargs = {}
+        model_kwargs = {"dropout": config.model.dropout} if config.model.name == "baseline" else {}
+        if config.model.name == "degree_attention":
+            model_kwargs = {"dropout": config.model.dropout,
+                            "heads": config.model.heads,
+                            "attention_budgets": config.model.attention_budgets}
         if config.model.name == "smart":
             processed_dir = Path(config.paths.data_dir) / f"processed/{config.data.dataset_version}"
             go_nodes_path = processed_dir / "go_nodes.csv"
@@ -45,7 +50,7 @@ class Predictor:
             **model_kwargs
         ).to(self.device)
         
-        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
+        self.model.load_state_dict(load_model_weights(checkpoint_path, self.device))
         self.model.eval()
 
     @torch.no_grad()

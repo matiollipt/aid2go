@@ -2,6 +2,7 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
+from aid2go.core.serialization import load_graph
 
 app = typer.Typer(help="Inference & CAFA submission table export commands")
 
@@ -25,7 +26,10 @@ def predict(
         typer.echo(f"Graph data not found at {graph_path}. Run preprocess graph first.")
         raise typer.Exit(code=1)
 
-    data = torch.load(graph_path)
+    if config.training.split_strategy == "protein":
+        data = load_graph(processed_dir / "test_data.pt")
+    else:
+        data = load_graph(graph_path)
     obo_path = processed_dir / "go-basic.obo"
 
     predictor = Predictor(config, str(checkpoint_path), data)

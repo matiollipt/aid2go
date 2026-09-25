@@ -1,4 +1,7 @@
 import logging
+import json
+import os
+import tempfile
 from pathlib import Path
 import pandas as pd
 import networkx as nx
@@ -7,23 +10,31 @@ import pickle
 import requests
 from obonet import read_obo
 from transformers import BertTokenizer, BertModel
-from tqdm.auto import tqdm
+from aid2go.cli.progress import track_items
 
 from aid2go.core.config import AppConfig
+from aid2go.core.device import resolve_device
 
 logger = logging.getLogger(__name__)
 
-def download_go_obo(url: str, output_path: Path):
-    if output_path.exists():
+def download_go_obo(url: str, output_path: Path, replace: bool = False):
+    if output_path.exists() and not replace:
         logger.info(f"GO OBO exists at {output_path}")
         return
     
     logger.info(f"Downloading GO OBO from {url}")
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
-    with open(output_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
+    fd, temporary = tempfile.mkstemp(prefix=".go-basic.", dir=output_path.parent)
+    os.close(fd)
+    try:
+        with requests.get(url, stream=True, timeout=(15, 120)) as response:
+            response.raise_for_status()
+            with open(temporary, "wb") as destination:
+                for chunk in response.iter_content(chunk_size=8192):
+                    destination.write(chunk)
+        os.replace(temporary, output_path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 def parse_go_dag(obo_path: Path, output_dir: Path, top_n: int):
     logger.info("Parsing GO DAG...")
@@ -76,6 +87,7 @@ class TextDataset(torch.utils.data.Dataset):
 
 def embed_go_terms(go_df: pd.DataFrame, output_path: Path, device: str = "cuda"):
     logger.info("Embedding GO terms...")
+    device = resolve_device(device)
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     model = BertModel.from_pretrained("bert-base-uncased").to(device)
     model.eval()
@@ -88,11 +100,12 @@ def embed_go_terms(go_df: pd.DataFrame, output_path: Path, device: str = "cuda")
     
     embeddings = {}
     idx = 0
-    with torch.no_grad():
-        for batch_texts in tqdm(loader, desc="Embedding GO"):
+    with torch.inference_mode():
+        for batch_texts in track_items(loader, "Embedding GO", "batches"):
             inputs = tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt").to(device)
-            outputs = model(**inputs).last_hidden_state.mean(dim=1)
-            for emb in outputs.cpu():
+            with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
+                outputs = model(**inputs).last_hidden_state.mean(dim=1)
+            for emb in outputs.float().cpu():
                 embeddings[ids[idx]] = emb
                 idx += 1
                 
@@ -105,16 +118,28 @@ def run_preprocess_go(config: AppConfig, processed_dir: Path, force: bool = Fals
     nodes_path = processed_dir / "go_nodes.csv"
     edges_path = processed_dir / "go_edges.tsv"
     emb_path = processed_dir / "go_embeddings.pkl"
+    from aid2go.data.cache import stage_current, record_stage, manifest_path
     
-    if not force and nodes_path.exists() and edges_path.exists() and emb_path.exists():
+    if not force and nodes_path.exists() and edges_path.exists() and emb_path.exists() and (
+        not config.data.dataset_version.startswith("v2") or stage_current("go", config, processed_dir)
+    ):
         logger.info(f"[CACHE] GO artifacts already exist in {processed_dir}. Skipping GO preprocessing. (Use force=True to recompute)")
         print(f"✓ [CACHE] GO artifacts already exist in {processed_dir}. Skipping GO preprocessing.")
         return
 
     obo_path = processed_dir / "go-basic.obo"
-    download_go_obo(config.data.go_obo_url, obo_path)
+    old_manifest = manifest_path(processed_dir, "go")
+    previous_url = None
+    if old_manifest.exists():
+        try:
+            previous_url = json.loads(old_manifest.read_text()).get("parameters", {}).get("go_obo_url")
+        except (OSError, json.JSONDecodeError):
+            pass
+    download_go_obo(config.data.go_obo_url, obo_path,
+                    replace=previous_url is not None and previous_url != config.data.go_obo_url)
     go_df, _ = parse_go_dag(obo_path, processed_dir, top_n=config.data.top_n_go_terms)
     
     embed_go_terms(go_df, emb_path, device=config.training.device)
+    if config.data.dataset_version.startswith("v2"):
+        record_stage("go", config, processed_dir)
     logger.info("GO Preprocessing complete.")
-

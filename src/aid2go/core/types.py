@@ -4,6 +4,7 @@ from typing import Literal, Dict, Any, List
 class ModelName(str, Enum):
     BASELINE = "baseline"
     SMART = "smart"
+    DEGREE_ATTENTION = "degree_attention"
 
 class DatasetSplit(str, Enum):
     TRAIN = "train"

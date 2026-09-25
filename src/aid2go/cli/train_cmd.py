@@ -2,6 +2,7 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
+from aid2go.core.serialization import load_graph
 
 app = typer.Typer(help="Model training subcommands")
 
@@ -12,6 +13,7 @@ def run(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c
     from aid2go.training.trainer import Trainer
     from aid2go.training.mlflow_tracker import MLFlowTracker
     from aid2go.training.trackers import NoOpTracker
+    from aid2go.core.seed import seed_everything
 
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
@@ -23,10 +25,15 @@ def run(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c
         typer.echo(f"Graph data not found at {graph_path}. Run preprocess graph first.")
         raise typer.Exit(code=1)
         
-    data = torch.load(graph_path)
-    
-    # Create splits
-    train_data, val_data, test_data = create_splits(data)
+    seed_everything(config.training.seed)
+    data = load_graph(graph_path)
+    if config.training.split_strategy == "protein":
+        train_data = load_graph(processed_dir / "train_data.pt")
+        val_data = load_graph(processed_dir / "val_data.pt")
+    elif config.training.split_strategy == "link":
+        train_data, val_data, _ = create_splits(data, seed=config.training.seed)
+    else:
+        raise ValueError(f"Unknown split strategy: {config.training.split_strategy}")
     
     if config.tracking.enabled:
         tracker = MLFlowTracker(

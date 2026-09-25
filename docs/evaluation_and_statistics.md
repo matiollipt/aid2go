@@ -1,5 +1,11 @@
 # Evaluation Metrics & Statistical Foundations
 
+The current `aid2go evaluate` command scores balanced positive and sampled
+negative protein-GO links from a random edge split. Proteins can occur in both
+training and evaluation. This is a useful internal link-prediction check, but
+it is not a time-delayed, protein-held-out CAFA benchmark. Reported AUPR and
+Fmax must be interpreted under that sampled-pair protocol.
+
 Evaluating protein function prediction models requires specialized statistical metrics. Standard classification metrics (such as flat accuracy or binary cross-entropy) are inadequate due to:
 1. **Extreme Class Imbalance**: Most specific GO terms are annotated to fewer than 0.01% of proteins in a proteome.
 2. **Open-World Assumption**: The absence of an experimental annotation does not imply that the protein does not perform that function (it may simply be uncharacterized).

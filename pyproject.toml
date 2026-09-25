@@ -25,6 +25,7 @@ dependencies = [
     "tqdm",
     "matplotlib",
     "seaborn",
+    "umap-learn>=0.5.7",
     "h5py",
     "faiss-cpu"
 ]

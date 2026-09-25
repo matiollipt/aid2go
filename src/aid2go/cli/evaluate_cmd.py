@@ -2,8 +2,9 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
+from aid2go.core.serialization import load_graph, load_model_weights
 
-app = typer.Typer(help="Certified model evaluation subcommands")
+app = typer.Typer(help="Held-out link evaluation subcommands")
 
 @app.command()
 def evaluate(
@@ -30,8 +31,24 @@ def evaluate(
         typer.echo(f"Graph data not found at {graph_path}. Run preprocess graph first.")
         raise typer.Exit(code=1)
 
-    data = torch.load(graph_path)
-    _, _, test_data = create_splits(data)
+    data = load_graph(graph_path)
+    if config.training.split_strategy == "protein":
+        import json
+        from aid2go.eval.protein_holdout import evaluate_holdout
+        manifest = json.loads((processed_dir / "split_manifest.json").read_text())
+        val_data = load_graph(processed_dir / "val_data.pt")
+        test_data = load_graph(processed_dir / "test_data.pt")
+        train_data = load_graph(processed_dir / "train_data.pt")
+        trainer = Trainer(config, test_data, NoOpTracker(), paths.models)
+        trainer.model.load_state_dict(load_model_weights(checkpoint_path, trainer.device))
+        report_dir = paths.reports / "experiments" / config.data.dataset_version / config.model.name.value
+        evaluate_holdout(trainer.model, val_data, test_data, data,
+                         pd.read_csv(processed_dir / "go_nodes.csv"),
+                         manifest["train_proteins"], manifest["val_proteins"],
+                         trainer.device, report_dir, train_data=train_data)
+        console.print(f"Saved protein-held-out report to {report_dir}")
+        return
+    _, _, test_data = create_splits(data, seed=config.training.seed)
     
     # Load IA values and GO aspect map if available
     ia_path = processed_dir / "ia_values.pkl"
@@ -50,12 +67,12 @@ def evaluate(
 
     # Setup trainer & load weights
     trainer = Trainer(config, data, NoOpTracker(), paths.models)
-    trainer.model.load_state_dict(torch.load(checkpoint_path, map_location=trainer.device))
+    trainer.model.load_state_dict(load_model_weights(checkpoint_path, trainer.device))
     
     metrics = trainer.evaluate(test_data)
     
     # Display Rich evaluation table
-    table = Table(title="Certified CAFA Model Evaluation Results", show_header=True)
+    table = Table(title="Held-out Protein-GO Link Evaluation", show_header=True)
     table.add_column("Metric", style="cyan")
     table.add_column("Score", style="green bold")
 
@@ -66,4 +83,4 @@ def evaluate(
 
     report_dir = paths.get_report_dir("evaluation")
     report_file = cafa_evaluator.generate_report(metrics, report_dir)
-    console.print(f"✓ Saved certified evaluation report to {report_file}")
+    console.print(f"✓ Saved held-out link evaluation report to {report_file}")

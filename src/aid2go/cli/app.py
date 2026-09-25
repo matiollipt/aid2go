@@ -12,9 +12,12 @@ from aid2go.cli import (
     eda_cmd,
     evaluate_cmd,
     predict_cmd,
+    experiment_cmd,
 )
 from aid2go.core.config import AppConfig
+from aid2go.core.device import resolve_device
 from aid2go.core.paths import ProjectPaths
+from aid2go.cli.progress import make_progress, run_stage
 
 app = typer.Typer(
     help="Aid2Go: Protein Function Prediction Framework",
@@ -29,6 +32,7 @@ app.add_typer(train_cmd.app, name="train", help="Model training subcommands")
 app.add_typer(evaluate_cmd.app, name="evaluate", help="Model evaluation commands")
 app.add_typer(predict_cmd.app, name="predict", help="Inference & submission table exporter")
 app.add_typer(explain_cmd.app, name="explain", help="GNN explainer commands")
+app.add_typer(experiment_cmd.app, name="experiment", help="Controlled model experiments")
 
 @app.command()
 def status(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c")):
@@ -48,8 +52,11 @@ def status(config_path: Path = typer.Option("configs/default.yaml", "--config", 
 
     env_table.add_row("Python Version", sys.version.split()[0])
     env_table.add_row("PyTorch Version", torch.__version__)
+    env_table.add_row("PyTorch CUDA Build", str(torch.version.cuda or "None"))
     cuda_available = torch.cuda.is_available()
     env_table.add_row("CUDA Available", "[green]Yes[/green]" if cuda_available else "[yellow]No (CPU mode)[/yellow]")
+    env_table.add_row("Configured Device", config.training.device)
+    env_table.add_row("Effective Device", str(resolve_device(config.training.device)))
     if cuda_available:
         env_table.add_row("GPU Device", torch.cuda.get_device_name(0))
 
@@ -95,30 +102,26 @@ def pipeline(
     config = AppConfig.from_yaml(config_path)
     paths = ProjectPaths(config.paths.root_dir)
 
-    # 1. Preprocess
-    console.print("\n[bold yellow]Step 1/5: Data Preprocessing[/bold yellow]")
-    preprocess_cmd.all(config_path=config_path, force=force)
-
-    # 2. EDA
-    console.print("\n[bold yellow]Step 2/5: Exploratory Data Analysis[/bold yellow]")
-    eda_cmd.report(config_path=config_path)
-
-    # 3. Train
-    console.print("\n[bold yellow]Step 3/5: Model Training[/bold yellow]")
-    train_cmd.run(config_path=config_path)
-
-    # 4. Evaluate
-    best_model_path = paths.models / config.tracking.experiment_name / "best_model.pt"
-    if best_model_path.exists():
-        console.print("\n[bold yellow]Step 4/5: Model Evaluation[/bold yellow]")
-        evaluate_cmd.evaluate(config_path=config_path, checkpoint_path=best_model_path)
-    else:
-        console.print("[yellow]Skipping evaluation: best_model.pt not found.[/yellow]")
-
-    # 5. Predict
-    if best_model_path.exists():
-        console.print("\n[bold yellow]Step 5/5: Inference & Submission Table Generation[/bold yellow]")
-        predict_cmd.predict(config_path=config_path, checkpoint_path=best_model_path)
+    with make_progress() as progress:
+        preprocess_cmd.all(config_path=config_path, force=force)
+        stages = [
+            ("Exploratory analysis", lambda: eda_cmd.report(config_path=config_path)),
+            ("Model training", lambda: train_cmd.run(config_path=config_path)),
+            ("Model evaluation", lambda: evaluate_cmd.evaluate(
+                config_path=config_path, checkpoint_path=best_model_path)),
+            ("Submission export", lambda: predict_cmd.predict(
+                config_path=config_path, checkpoint_path=best_model_path)),
+        ]
+        tasks = [progress.add_task(label, total=1, detail="pending") for label, _ in stages]
+        run_stage(progress, stages[0][0], stages[0][1], task_id=tasks[0])
+        run_stage(progress, stages[1][0], stages[1][1], task_id=tasks[1])
+        best_model_path = paths.models / config.tracking.experiment_name / "best_model.pt"
+        if best_model_path.exists():
+            run_stage(progress, stages[2][0], stages[2][1], task_id=tasks[2])
+            run_stage(progress, stages[3][0], stages[3][1], task_id=tasks[3])
+        else:
+            for task_id in tasks[2:]:
+                progress.update(task_id, completed=1, detail="[yellow]skipped: no best model[/yellow]")
 
     console.print(Panel.fit("[bold green]✅ End-to-End Pipeline Finished Successfully![/bold green]"))
 

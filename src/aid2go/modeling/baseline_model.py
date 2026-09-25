@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv, HeteroConv
 
 class BaselineHeteroGNN(torch.nn.Module):
-    def __init__(self, metadata, hidden_channels, out_channels, num_layers):
+    def __init__(self, metadata, hidden_channels, out_channels, num_layers, dropout=0.0):
         super().__init__()
+        self.dropout = dropout
         self.convs = torch.nn.ModuleList()
         for _ in range(num_layers):
             rel_convs = {}
@@ -20,9 +22,10 @@ class BaselineHeteroGNN(torch.nn.Module):
         # SAGEConv lazy initialization expects all feature tensors to be available
         for conv in self.convs:
             x_dict = conv(x_dict, edge_index_dict)
-            x_dict = {key: x.relu() for key, x in x_dict.items()}
+            x_dict = {key: F.dropout(x.relu(), p=self.dropout, training=self.training)
+                      for key, x in x_dict.items()}
             
-        return x_dict
+        return {key: self.lin(x) for key, x in x_dict.items()}
 
 class LinkPredictor(torch.nn.Module):
     def __init__(self):
@@ -39,9 +42,10 @@ class LinkPredictor(torch.nn.Module):
         return (source_emb * target_emb).sum(dim=-1)
 
 class BaselineModel(torch.nn.Module):
-    def __init__(self, metadata, hidden_channels, out_channels, num_layers=2):
+    def __init__(self, metadata, hidden_channels, out_channels, num_layers=2, dropout=0.0):
         super().__init__()
-        self.encoder = BaselineHeteroGNN(metadata, hidden_channels, out_channels, num_layers)
+        self.encoder = BaselineHeteroGNN(metadata, hidden_channels, out_channels,
+                                         num_layers, dropout)
         self.decoder = LinkPredictor()
         
     def forward(self, x_dict, edge_index_dict, edge_label_index, protein_n_id=None, go_node_ids=None):

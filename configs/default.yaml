@@ -4,13 +4,16 @@ paths:
 
 data:
   go_obo_url: "https://purl.obolibrary.org/obo/go/go-basic.obo"
-  goa_url: "http://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_gcrp.gaf.gz"
-  dataset_version: "v1"
+  goa_url: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_gcrp.gaf.gz"
+  dataset_version: "v2_unique_pairs"
+  goa_archive_path: "data/processed/v1/goa_uniprot_gcrp.gaf.gz"
   evidence_codes:
     cafa: ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "TAS", "IC"]
   top_n_go_terms: 1000
   max_proteins: 5000
   esm_model_name: "facebook/esm2_t33_650M_UR50D"
+  embedding_batch_size: 32
+  embedding_token_budget: 8192
   knn_k: 10
   strict_cosine_similarity: false
   protein_representation: "node"
@@ -26,8 +29,12 @@ training:
   batch_size: 1024
   epochs: 5
   learning_rate: 0.001
-  device: "cpu" # Default to CPU for safety in unknown envs, change to cuda if available
+  device: "auto" # Prefer CUDA when available; CPU fallback
+  mixed_precision: true
+  seed: 42
+  split_strategy: "link"
+  loss: "auto"
 
 tracking:
   enabled: false
-  experiment_name: "aid2go_default"
+  experiment_name: "aid2go_v2_default"

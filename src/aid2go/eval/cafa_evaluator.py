@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 class CAFAEvaluator:
     """
-    Certified CAFA Evaluator implementing Fmax, Smax (Information Accretion weighted),
-    and AUPR metrics across GO subontologies (BPO, CCO, MFO).
+    CAFA-style metric calculations; certification depends on the evaluation
+    dataset and protocol, which this class does not establish.
     """
 
     def __init__(self, ia_dict: Optional[Dict[str, float]] = None, go_aspect_map: Optional[Dict[str, str]] = None):
@@ -23,7 +23,7 @@ class CAFAEvaluator:
         y_true: np.ndarray,
         y_score: np.ndarray,
         go_terms: Optional[List[str]] = None
-    ) -> Dict[str, float]:
+    ) -> Dict[str, float | str]:
         """
         Evaluates overall and aspect-specific CAFA metrics.
 
@@ -58,6 +58,9 @@ class CAFAEvaluator:
                     yt_sub = y_true[:, indices]
                     ys_sub = y_score[:, indices]
                     ia_sub = ia_weights[indices]
+                    if not np.any(yt_sub):
+                        metrics[f"{aspect_code}_status"] = "no observed positives"
+                        continue
 
                     metrics[f"{aspect_code}_fmax"] = calculate_fmax(yt_sub, ys_sub)
                     metrics[f"{aspect_code}_smax"] = calculate_smax(yt_sub, ys_sub, ia_sub)
@@ -65,19 +68,23 @@ class CAFAEvaluator:
 
         return metrics
 
-    def generate_report(self, metrics: Dict[str, float], output_dir: Path) -> Path:
+    def generate_report(self, metrics: Dict[str, float | str], output_dir: Path) -> Path:
         """Saves evaluation metrics to JSON and Markdown summary reports."""
         output_dir.mkdir(parents=True, exist_ok=True)
         report_path = output_dir / "cafa_evaluation_report.md"
 
         lines = [
-            "# CAFA Certified Evaluation Report",
+            "# Held-out protein-GO link evaluation",
+            "",
+            "These scores use a random split of observed links and sampled negative pairs.",
+            "The same proteins can occur in training and evaluation; this is not a CAFA benchmark.",
             "",
             "| Metric | Value |",
             "| :--- | :--- |",
         ]
         for k, v in metrics.items():
-            lines.append(f"| `{k}` | `{v:.4f}` |")
+            lines.append(f"| `{k}` | `{v:.4f}` |" if isinstance(v, (int, float))
+                         else f"| `{k}` | {v} |")
 
         with open(report_path, "w") as f:
             f.write("\n".join(lines) + "\n")

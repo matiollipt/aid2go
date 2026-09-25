@@ -2,6 +2,7 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
+from aid2go.core.serialization import load_graph, load_model_weights
 
 app = typer.Typer(help="GNN Explainer commands")
 
@@ -10,7 +11,8 @@ def link(
     protein_idx: int = typer.Option(0, "--protein-idx", "-p", help="Local index of protein node to explain"),
     go_idx: int = typer.Option(0, "--go-idx", "-g", help="Local index of GO node to explain"),
     config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file"),
-    model_path: Path = typer.Option(None, "--model-path", "-m", help="Path to trained model weights (.pt)")
+    model_path: Path = typer.Option(None, "--model-path", "-m", help="Path to trained model weights (.pt)"),
+    output_dir: Path = typer.Option(None, "--output-dir", "-o", help="Directory for saved attribution and perturbation figures")
 ):
     import torch
     from aid2go.explain.explain_links import explain_protein_go_link, get_top_explanatory_nodes
@@ -27,7 +29,10 @@ def link(
         typer.echo(f"Graph data not found at {graph_path}. Run preprocess graph first.")
         raise typer.Exit(code=1)
         
-    data = torch.load(graph_path)
+    if config.training.split_strategy == "protein":
+        data = load_graph(processed_dir / "test_data.pt")
+    else:
+        data = load_graph(graph_path)
     
     # Initialize trainer to easily build model with same dimensions
     trainer = Trainer(config, data, NoOpTracker(), processed_dir)
@@ -40,10 +45,11 @@ def link(
             
     if model_path.exists():
         typer.echo(f"Loading trained model weights from {model_path}...")
-        trainer.model.load_state_dict(torch.load(model_path, map_location=trainer.device))
+        trainer.model.load_state_dict(load_model_weights(model_path, trainer.device))
     else:
         typer.echo("Warning: No trained model weights found. Explaining an untrained model.")
         
+    data = data.to(trainer.device)
     explanation = explain_protein_go_link(trainer.model, data, protein_idx, go_idx, epochs=50)
     top_nodes = get_top_explanatory_nodes(explanation, top_k_nodes=5)
     
@@ -52,3 +58,8 @@ def link(
         typer.echo(f"\nNode Type: {node_type}")
         for idx, importance in nodes:
             typer.echo(f"  Node Index: {idx} | Importance: {importance:.4f}")
+    from aid2go.explain.report import save_link_explanation
+    if output_dir is None:
+        output_dir = paths.get_report_dir("explanations") / config.data.dataset_version / config.model.name.value / f"protein_{protein_idx}_go_{go_idx}"
+    save_link_explanation(trainer.model, data, protein_idx, go_idx, output_dir)
+    typer.echo(f"Saved explanation figure and JSON to {output_dir}")

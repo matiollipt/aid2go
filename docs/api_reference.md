@@ -28,13 +28,13 @@ Helper class providing deterministic directory resolution:
 Parses the Gene Ontology OBO file, computes node degrees, filters top $N$ terms, extracts ontology hierarchy edges, and generates 768-dimensional BERT textual definition embeddings stored in `go_embeddings.pkl`. Automatically skips processing if target artifacts exist unless `force=True`.
 
 ### `run_preprocess_goa(config: AppConfig, processed_dir: Path, force: bool = False)`
-Parses and filters Gene Ontology Annotation (GAF) files by experimental evidence codes, subsets proteins to top density, and calculates Information Accretion ($IA$) weights across subontologies. Saves `goa_filtered.tsv` and `ia_values.pkl`.
+Parses Gene Ontology Annotation (GAF) files by evidence code into disk-backed unique protein–GO pairs, ranks proteins by distinct annotations, and saves `goa_filtered.tsv`. For v2, IA is deferred until sequence validation.
 
 ### `run_preprocess_proteins(config: AppConfig, processed_dir: Path, force: bool = False)`
-Fetches protein amino acid sequences from UniProtKB via REST API, tokenizes sequences, and computes 1280-dimensional ESM-2 transformer embeddings. Constructs C-alpha spatial contact graphs (or sequence chain fallbacks) and saves all tensors to HDF5 format in `protein_data.h5`.
+Fetches protein amino acid sequences from UniProtKB via REST API, tokenizes sequences, and computes 1280-dimensional ESM-2 transformer embeddings. Constructs C-alpha spatial contact graphs (or sequence chain fallbacks) and saves tensors to `protein_data.h5`. The v2 path also saves sequence hashes and computes IA from the final sequence-valid cohort.
 
 ### `run_preprocess_ppi(config: AppConfig, processed_dir: Path, force: bool = False)`
-Loads protein embeddings from `protein_data.h5`, normalizes vectors for cosine similarity, builds an exact FAISS index (`IndexFlatIP`), searches for top-$k$ nearest neighbors, and exports `ppi_edge_index.pt`.
+Loads protein embeddings from `protein_data.h5`, builds exact nearest neighbors with L2 distance or normalized cosine similarity according to the config, and exports `ppi_edge_index.pt`.
 
 ### `build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = False) -> HeteroData`
 Assembles all processed components into a unified PyTorch Geometric `HeteroData` graph:
