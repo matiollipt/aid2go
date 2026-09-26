@@ -67,6 +67,8 @@ aid2go experiment sample --baseline-config configs/default.yaml --attention-conf
 
 The sample command saves the split manifest under `data/processed/v2_unique_pairs_sample_1000x100_seed42/`, model checkpoints under `models/`, and EDA, evaluation, comparison, and explanation reports under `reports/experiments/`. It selects GO targets using training proteins only and uses the same split and BCE loss for both models. Existing model results should not be compared with the new protein-holdout results as if they used the same protocol.
 
+See the [full pipeline and model inspection diagrams](docs/full_pipeline_diagram.md) for the data flow, model branches, evaluation, and direct links to the saved outputs.
+
 ### 3. Run the End-to-End Pipeline
 Run all pipeline steps (Preprocess $\to$ EDA $\to$ Train $\to$ Evaluate $\to$ Export CAFA Submission):
 ```bash

@@ -48,6 +48,10 @@ class BaselineModel(torch.nn.Module):
                                          num_layers, dropout)
         self.decoder = LinkPredictor()
         
+    def encode(self, x_dict, edge_index_dict):
+        """Return learned node embeddings before protein-GO link decoding."""
+        return self.encoder(x_dict, edge_index_dict)
+
     def forward(self, x_dict, edge_index_dict, edge_label_index, protein_n_id=None, go_node_ids=None):
-        z_dict = self.encoder(x_dict, edge_index_dict)
+        z_dict = self.encode(x_dict, edge_index_dict)
         return self.decoder(z_dict["protein"], z_dict["go"], edge_label_index)

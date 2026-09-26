@@ -19,11 +19,13 @@ from aid2go.eval.cafa_metrics import calculate_aupr, calculate_fmax
 logger = logging.getLogger(__name__)
 
 class Trainer:
-    def __init__(self, config: AppConfig, data, tracker: Tracker, save_dir: Path):
+    def __init__(self, config: AppConfig, data, tracker: Tracker, save_dir: Path,
+                 diagnostics=None):
         self.config = config
         self.data = data
         self.tracker = tracker
         self.save_dir = save_dir
+        self.diagnostics = diagnostics
         self.device = resolve_device(config.training.device)
         self.use_amp = self.device.type == "cuda" and config.training.mixed_precision
         self.scaler = torch.amp.GradScaler("cuda", enabled=self.use_amp)
@@ -207,22 +209,29 @@ class Trainer:
             f"Training on {self.device}: {positives:,} positive + {negatives:,} negative links; "
             f"{len(train_loader):,} batch(es)/epoch for {self.config.training.epochs} epochs"
         )
+        if self.diagnostics is not None:
+            self.diagnostics.start(self.tracker)
         
         for epoch in track_items(range(self.config.training.epochs), "Training epochs", "epochs"):
             steps_before = self.optimizer_steps
             train_loss = self.train_epoch(train_loader)
             val_metrics = self.evaluate(val_loader)
+            detail = (self.diagnostics.log_epoch(epoch + 1, self.model, self.device,
+                                                 self.tracker, self.config.training.epochs)
+                      if self.diagnostics is not None else {})
             history.append({"epoch": epoch + 1, "train_loss": train_loss,
                             "val_aupr": val_metrics["aupr"],
                             "val_fmax": val_metrics["fmax"],
-                            "optimizer_steps": self.optimizer_steps - steps_before})
+                            "optimizer_steps": self.optimizer_steps - steps_before,
+                            **detail})
             
             logger.info(f"Epoch {epoch}: Loss {train_loss:.4f}, Val AUPR {val_metrics['aupr']:.4f}")
             
             self.tracker.log_metrics({
                 "train_loss": train_loss,
                 "val_aupr": val_metrics["aupr"],
-                "val_fmax": val_metrics["fmax"]
+                "val_fmax": val_metrics["fmax"],
+                **detail,
             }, step=epoch)
             
             # Save best

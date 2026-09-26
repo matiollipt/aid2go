@@ -3,8 +3,11 @@ import mlflow
 from aid2go.training.trackers import Tracker
 
 class MLFlowTracker(Tracker):
-    def __init__(self, experiment_name: str, uri: str, run_name: Optional[str] = None):
+    def __init__(self, experiment_name: str, uri: str, run_name: Optional[str] = None,
+                 artifact_location: Optional[str] = None):
         mlflow.set_tracking_uri(uri)
+        if artifact_location is not None and mlflow.get_experiment_by_name(experiment_name) is None:
+            mlflow.create_experiment(experiment_name, artifact_location=artifact_location)
         mlflow.set_experiment(experiment_name)
         self.run = mlflow.start_run(run_name=run_name)
 

@@ -66,8 +66,8 @@ class DegreeAttentionModel(nn.Module):
             self.convs.append(HeteroConv(relations, aggr="mean"))
         self.output = nn.Linear(hidden_channels, out_channels)
 
-    def forward(self, x_dict, edge_index_dict, edge_label_index,
-                protein_n_id=None, go_node_ids=None):
+    def encode(self, x_dict, edge_index_dict):
+        """Return learned node embeddings before protein-GO link decoding."""
         states = {name: F.relu(self.project[name](features))
                   for name, features in x_dict.items()}
         for conv in self.convs:
@@ -77,8 +77,13 @@ class DegreeAttentionModel(nn.Module):
                                 p=self.dropout, training=self.training)
                 for name in states
             }
-        protein = self.output(states["protein"])[edge_label_index[0]]
-        go = self.output(states["go"])[edge_label_index[1]]
+        return {name: self.output(value) for name, value in states.items()}
+
+    def forward(self, x_dict, edge_index_dict, edge_label_index,
+                protein_n_id=None, go_node_ids=None):
+        states = self.encode(x_dict, edge_index_dict)
+        protein = states["protein"][edge_label_index[0]]
+        go = states["go"][edge_label_index[1]]
         return (protein * go).sum(dim=-1)
 
     def attention_by_relation(self):
