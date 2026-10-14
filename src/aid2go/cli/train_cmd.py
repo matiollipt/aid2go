@@ -2,12 +2,12 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.core.serialization import load_graph
 
 app = typer.Typer(help="Model training subcommands")
 
 @app.command()
 def run(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file")):
+    from aid2go.core.serialization import load_graph
     import torch
     from aid2go.data.splits import create_splits
     from aid2go.training.trainer import Trainer

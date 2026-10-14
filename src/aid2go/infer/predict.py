@@ -17,6 +17,7 @@ class Predictor:
         self.config = config
         self.device = resolve_device(config.training.device)
         self.data = data
+        self.go_term_order = None
         
         # Build model kwargs matching Trainer setup
         model_kwargs = {"dropout": config.model.dropout} if config.model.name == "baseline" else {}
@@ -76,38 +77,44 @@ class Predictor:
         if protein_indices is None:
             protein_indices = torch.arange(num_proteins, device=self.device)
 
+        from aid2go.cli.progress import track_items
+        import networkx as nx
+
+        if apply_true_path and (obo_path is None or not obo_path.is_file()):
+            raise FileNotFoundError("True-path propagation requires an existing GO OBO file")
+        dag = load_go_dag(obo_path) if apply_true_path else None
+        ancestor_map = ({term: nx.descendants(dag, term) for term in go_ids if term in dag}
+                        if dag is not None else None)
+        # Ancestors win equal-score ties before the submission top-k cutoff.
+        self.go_term_order = ({term: rank for rank, term in enumerate(
+            reversed(list(nx.topological_sort(dag))))} if dag is not None else None)
+        # Encode the graph once. Only link decoding scales with the requested pairs.
+        if self.config.model.name == "smart":
+            states = self.model.encode(data.x_dict, data.edge_index_dict,
+                                       protein_n_id=getattr(data["protein"], "n_id", None))
+        else:
+            states = self.model.encode(data.x_dict, data.edge_index_dict)
+
         predictions = {}
-        
-        # Compute embeddings via encoder
-        # We construct all pairs batching by protein
         batch_size_p = 32
-        for start_idx in range(0, len(protein_indices), batch_size_p):
+        protein_indices = protein_indices.to(self.device)
+        chunks = range(0, len(protein_indices), batch_size_p)
+        for start_idx in track_items(chunks, "Inference", "protein batches"):
             p_chunk = protein_indices[start_idx:start_idx + batch_size_p]
-            
-            for p_idx in p_chunk:
-                pid = protein_ids[p_idx.item()]
-                
-                # Pair p_idx with all GO nodes
-                edge_label_index = torch.stack([
-                    torch.full((num_go,), p_idx, dtype=torch.long, device=self.device),
-                    torch.arange(num_go, dtype=torch.long, device=self.device)
-                ], dim=0)
-
-                logits = self.model(
-                    data.x_dict,
-                    data.edge_index_dict,
-                    edge_label_index,
-                    protein_n_id=getattr(data["protein"], "n_id", None),
-                    go_node_ids=getattr(data["go"], "node_id", None)
-                )
-
-                probs = torch.sigmoid(logits).cpu().numpy()
-                term_scores = {go_ids[j]: float(probs[j]) for j in range(num_go)}
-
-                if apply_true_path and obo_path and obo_path.exists():
-                    dag = load_go_dag(obo_path)
-                    term_scores = enforce_true_path_rule(term_scores, dag)
-
-                predictions[pid] = term_scores
+            edge_label_index = torch.stack([
+                p_chunk.repeat_interleave(num_go),
+                torch.arange(num_go, device=self.device).repeat(len(p_chunk)),
+            ])
+            if self.config.model.name == "smart":
+                logits = self.model.decode(states, edge_label_index, go_node_ids=go_ids)
+            else:
+                logits = (states["protein"][edge_label_index[0]] *
+                          states["go"][edge_label_index[1]]).sum(dim=-1)
+            probabilities = torch.sigmoid(logits).reshape(len(p_chunk), num_go).cpu().tolist()
+            for p_idx, probs in zip(p_chunk.cpu().tolist(), probabilities):
+                term_scores = dict(zip(go_ids, probs))
+                if dag is not None:
+                    term_scores = enforce_true_path_rule(term_scores, dag, ancestor_map)
+                predictions[protein_ids[p_idx]] = term_scores
 
         return predictions

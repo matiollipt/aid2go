@@ -16,7 +16,8 @@ def load_go_dag(obo_path: Path) -> nx.DiGraph:
     clean_dag.remove_edges_from(remove_edges)
     return clean_dag
 
-def enforce_true_path_rule(scores_dict: Dict[str, float], dag: nx.DiGraph) -> Dict[str, float]:
+def enforce_true_path_rule(scores_dict: Dict[str, float], dag: nx.DiGraph,
+                           ancestor_map: Dict[str, Set[str]] | None = None) -> Dict[str, float]:
     """
     Enforces the True-Path Rule: P(parent) >= P(child).
     
@@ -42,7 +43,8 @@ def enforce_true_path_rule(scores_dict: Dict[str, float], dag: nx.DiGraph) -> Di
             continue
         if term in dag:
             # nx.descendants in obonet points up to parents
-            ancestors = nx.descendants(dag, term)
+            ancestors = (ancestor_map[term] if ancestor_map is not None
+                         else nx.descendants(dag, term))
             for parent in ancestors:
                 if parent in propagated:
                     propagated[parent] = max(propagated[parent], score)

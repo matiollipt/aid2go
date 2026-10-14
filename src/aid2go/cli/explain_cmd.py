@@ -2,7 +2,6 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.core.serialization import load_graph, load_model_weights
 
 app = typer.Typer(help="GNN Explainer commands")
 
@@ -14,6 +13,7 @@ def link(
     model_path: Path = typer.Option(None, "--model-path", "-m", help="Path to trained model weights (.pt)"),
     output_dir: Path = typer.Option(None, "--output-dir", "-o", help="Directory for saved attribution and perturbation figures")
 ):
+    from aid2go.core.serialization import load_graph, load_model_weights
     import torch
     from aid2go.explain.explain_links import explain_protein_go_link, get_top_explanatory_nodes
     from aid2go.training.trainer import Trainer

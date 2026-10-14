@@ -81,7 +81,7 @@ class SmartModel(torch.nn.Module):
             DecoderMLP(2 * hidden_channels)   # CC (Cellular Component)
         ])
 
-    def forward(self, x_dict, edge_index_dict, edge_label_index, protein_n_id=None, go_node_ids=None):
+    def encode(self, x_dict, edge_index_dict, protein_n_id=None):
         device = x_dict["go"].device
         
         # 1. Compute Protein node embeddings
@@ -113,15 +113,19 @@ class SmartModel(torch.nn.Module):
             h_dict = conv(h_dict, edge_index_dict)
             h_dict = {key: x.relu() for key, x in h_dict.items()}
             
+        return h_dict
+
+    def decode(self, h_dict, edge_label_index, go_node_ids=None):
+        device = h_dict["go"].device
         # 4. Decode edges
         source_idx = edge_label_index[0]
         target_idx = edge_label_index[1]
         
         # Retrieve target GO IDs
         if go_node_ids is not None:
-            target_go_ids = [go_node_ids[idx] for idx in target_idx]
+            target_go_ids = [go_node_ids[idx] for idx in target_idx.cpu().tolist()]
         elif self.go_ids:
-            target_go_ids = [self.go_ids[idx] for idx in target_idx]
+            target_go_ids = [self.go_ids[idx] for idx in target_idx.cpu().tolist()]
         else:
             # Fallback if no ID mapping is available
             target_go_ids = []
@@ -145,3 +149,7 @@ class SmartModel(torch.nn.Module):
                 out[mask] = self.decoders[cat_idx](feats[mask])
                 
         return out
+
+    def forward(self, x_dict, edge_index_dict, edge_label_index, protein_n_id=None, go_node_ids=None):
+        states = self.encode(x_dict, edge_index_dict, protein_n_id=protein_n_id)
+        return self.decode(states, edge_label_index, go_node_ids=go_node_ids)

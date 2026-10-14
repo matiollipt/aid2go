@@ -2,7 +2,6 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.core.serialization import load_graph, load_model_weights
 
 app = typer.Typer(help="Held-out link evaluation subcommands")
 
@@ -11,6 +10,7 @@ def evaluate(
     config_path: Path = typer.Option("configs/default.yaml", "--config", "-c", help="Path to config file"),
     checkpoint_path: Path = typer.Option(..., "--checkpoint", "-k", help="Path to model checkpoint .pt")
 ):
+    from aid2go.core.serialization import load_graph, load_model_weights
     import torch
     import pickle
     import pandas as pd

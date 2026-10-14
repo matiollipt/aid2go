@@ -2,7 +2,6 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.core.serialization import load_graph
 
 app = typer.Typer(help="Inference & CAFA submission table export commands")
 
@@ -13,6 +12,7 @@ def predict(
     output_path: Path = typer.Option(None, "--output", "-o", help="Path to save submission tsv"),
     apply_true_path: bool = typer.Option(True, "--true-path/--no-true-path", help="Apply True-Path Rule score propagation")
 ):
+    from aid2go.core.serialization import load_graph
     import torch
     from aid2go.infer.predict import Predictor
     from aid2go.infer.summaries import export_cafa_submission
@@ -43,5 +43,5 @@ def predict(
     if output_path is None:
         output_path = paths.get_report_dir("submissions") / "submission.tsv"
 
-    export_cafa_submission(predictions, output_path)
+    export_cafa_submission(predictions, output_path, term_order=predictor.go_term_order)
     typer.echo(f"Inference complete. Submission saved to {output_path}")

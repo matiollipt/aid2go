@@ -40,3 +40,6 @@ dev = ["pytest", "requests-mock"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+aid2go = ["viz/templates/*.html", "viz/templates/*.css", "viz/templates/*.js", "viz/vendor/*.js", "viz/vendor/*.json", "viz/vendor/*LICENSE"]

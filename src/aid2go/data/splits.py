@@ -1,4 +1,7 @@
 import logging
+import random
+
+import numpy as np
 
 import torch
 from torch_geometric.transforms import RandomLinkSplit
@@ -31,7 +34,16 @@ def create_splits(data: HeteroData, val_ratio=0.1, test_ratio=0.1, seed=42):
     )
     # Training and evaluation must use the same split without disturbing the
     # global RNG used by model initialization and minibatch shuffling.
-    with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(seed)
-        train_data, val_data, test_data = transform(data)
+    python_state = random.getstate()
+    numpy_state = np.random.get_state()
+    try:
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(seed)
+            # PyG negative_sampling uses Python random.sample, not torch alone.
+            random.seed(seed)
+            np.random.seed(seed)
+            train_data, val_data, test_data = transform(data)
+    finally:
+        random.setstate(python_state)
+        np.random.set_state(numpy_state)
     return train_data, val_data, test_data

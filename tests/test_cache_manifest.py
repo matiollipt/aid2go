@@ -17,3 +17,10 @@ def test_input_fingerprint_invalidates_downstream_cache(tmp_path):
     record_stage("ppi", config, tmp_path)
     output.write_bytes(b"other-edges")
     assert not stage_current("ppi", config, tmp_path)
+
+
+def test_missing_inputs_cannot_be_current_even_if_manifest_records_missing(tmp_path):
+    config = AppConfig()
+    config.data.dataset_version = "v2_unique_pairs"
+    record_stage("ppi", config, tmp_path)
+    assert not stage_current("ppi", config, tmp_path)

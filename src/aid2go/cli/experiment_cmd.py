@@ -5,18 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import typer
 
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.core.seed import seed_everything
-from aid2go.core.serialization import load_graph
-from aid2go.data.sample import build_sample, _sha256
-from aid2go.eval.protein_holdout import evaluate_holdout
-from aid2go.training.trackers import NoOpTracker
-from aid2go.training.trainer import Trainer
 
 app = typer.Typer(help="Controlled protein-held-out experiments")
 
@@ -31,6 +23,15 @@ def sample(
     force_sample: bool = typer.Option(False, "--force-sample"),
 ):
     """Build a label-safe sample and save both model runs and diagnostics."""
+    import numpy as np
+    import pandas as pd
+    from aid2go.core.seed import seed_everything
+    from aid2go.core.serialization import load_graph
+    from aid2go.data.sample import build_sample, _sha256
+    from aid2go.eval.protein_holdout import evaluate_holdout
+    from aid2go.training.trackers import NoOpTracker
+    from aid2go.training.trainer import Trainer
+
     baseline = AppConfig.from_yaml(baseline_config)
     attention = AppConfig.from_yaml(attention_config)
     if baseline.model.name != "baseline" or attention.model.name != "degree_attention":

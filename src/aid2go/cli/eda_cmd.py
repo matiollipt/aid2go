@@ -2,13 +2,13 @@ from pathlib import Path
 import typer
 from aid2go.core.config import AppConfig
 from aid2go.core.paths import ProjectPaths
-from aid2go.core.serialization import load_graph
 
 app = typer.Typer(help="Exploratory Data Analysis commands")
 
 @app.command()
 def report(config_path: Path = typer.Option("configs/default.yaml", "--config", "-c")):
     import json
+    from aid2go.core.serialization import load_graph
     import torch
     from torch_geometric.utils import degree
     from aid2go.viz.eda import plot_ppi_degree, plot_go_frequency
@@ -49,3 +49,18 @@ def report(config_path: Path = typer.Option("configs/default.yaml", "--config", 
         json.dump(summary, f, indent=2)
         
     typer.echo(f"Report saved to {report_dir}")
+
+
+@app.command()
+def gallery(
+    config_path: Path = typer.Option("configs/default.yaml", "--config", "-c"),
+    output_dir: Path = typer.Option(None, "--output", "-o"),
+    seed: int = typer.Option(42, "--seed"),
+    force_projections: bool = typer.Option(False, "--force-projections"),
+):
+    """Build an offline HTML gallery of ontology, prediction and explanation plots."""
+    from aid2go.viz.gallery import build_gallery
+    config = AppConfig.from_yaml(config_path)
+    paths = ProjectPaths(config.paths.root_dir)
+    target = output_dir if output_dir is not None else paths.reports / "visualization-gallery"
+    typer.echo(f"Gallery saved to {build_gallery(config, target, seed, force_projections)}")

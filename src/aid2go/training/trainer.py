@@ -203,7 +203,7 @@ class Trainer:
             train_loader = [train_data.to(self.device)]
             val_loader = [val_data.to(self.device)]
             
-        best_metric = 0
+        best_metric = float("-inf")
         history = []
         Console().print(
             f"Training on {self.device}: {positives:,} positive + {negatives:,} negative links; "

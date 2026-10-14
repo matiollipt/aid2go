@@ -71,3 +71,21 @@ def test_pipeline_has_stage_rows_without_duplicate_pipeline_bar(tmp_path, monkey
         assert output.count(label) == 1
     assert "│ Pipeline " not in output
     assert events == ["preprocess", "eda", "train", "evaluate", "predict"]
+
+
+def test_pipeline_passes_concrete_submission_defaults(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(f"paths:\n  root_dir: {tmp_path}\n")
+    monkeypatch.setattr(app.preprocess_cmd, "all", lambda **kwargs: None)
+    monkeypatch.setattr(app.eda_cmd, "report", lambda **kwargs: None)
+    def train(**kwargs):
+        directory = tmp_path / "models" / "aid2go"
+        directory.mkdir(parents=True)
+        (directory / "best_model.pt").write_bytes(b"weights")
+    monkeypatch.setattr(app.train_cmd, "run", train)
+    monkeypatch.setattr(app.evaluate_cmd, "evaluate", lambda **kwargs: None)
+    def predict(**kwargs):
+        assert kwargs["output_path"] is None
+        assert kwargs["apply_true_path"] is True
+    monkeypatch.setattr(app.predict_cmd, "predict", predict)
+    app.pipeline(config_path=config_path)

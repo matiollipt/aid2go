@@ -74,7 +74,7 @@ def run_stage(progress: Progress, description: str, runner: Callable[[], object]
     if cached:
         progress.update(task_id, completed=1, detail="[cyan]cached[/cyan]")
         return
-    progress.update(task_id, detail="running")
+    progress.reset(task_id, total=1, start=True, detail="running")
     existing_tasks = {task.id for task in progress.tasks}
     try:
         runner()
@@ -82,6 +82,7 @@ def run_stage(progress: Progress, description: str, runner: Callable[[], object]
         if missing:
             raise RuntimeError(f"{description} did not create: {', '.join(map(str, missing))}")
     except Exception:
+        progress.stop_task(task_id)
         progress.update(task_id, detail="[red]failed[/red]")
         raise
     finally:
@@ -90,4 +91,6 @@ def run_stage(progress: Progress, description: str, runner: Callable[[], object]
         for task in list(progress.tasks):
             if task.id not in existing_tasks:
                 progress.remove_task(task.id)
-    progress.update(task_id, completed=1, detail="[green]done[/green]")
+    progress.stop_task(task_id)
+    elapsed = progress.tasks[progress.task_ids.index(task_id)].elapsed or 0
+    progress.update(task_id, completed=1, detail=f"[green]done ({elapsed:.1f}s)[/green]")

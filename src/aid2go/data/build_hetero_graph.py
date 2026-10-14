@@ -124,7 +124,7 @@ def build_hetero_graph(config: AppConfig, processed_dir: Path, force: bool = Fal
     # 4. Protein-Protein Similarity Edges
     ppi_edge_path = processed_dir / "ppi_edge_index.pt"
     if ppi_edge_path.exists():
-        ppi_edge_index = torch.load(ppi_edge_path)
+        ppi_edge_index = torch.load(ppi_edge_path, map_location="cpu", weights_only=True)
         if ppi_edge_index.numel() > 0:
             data["protein", "similarity", "protein"].edge_index = ppi_edge_index
         else:

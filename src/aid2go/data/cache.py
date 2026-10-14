@@ -43,7 +43,8 @@ def record(directory: Path, stage: str, inputs: dict[str, Path], parameters: dic
 
 def current(directory: Path, stage: str, inputs: dict[str, Path], parameters: dict) -> bool:
     path = manifest_path(directory, stage)
-    if not path.exists():
+    if not path.is_file() or any(not item.is_file() or item.stat().st_size == 0
+                                  for item in inputs.values()):
         return False
     try:
         previous = json.loads(path.read_text())
