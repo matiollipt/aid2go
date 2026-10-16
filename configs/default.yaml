@@ -9,7 +9,7 @@ data:
   goa_archive_path: "data/processed/v1/goa_uniprot_gcrp.gaf.gz"
   evidence_codes:
     cafa: ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "TAS", "IC"]
-  top_n_go_terms: 1000
+  top_n_go_terms: 5000
   max_proteins: 5000
   esm_model_name: "facebook/esm2_t33_650M_UR50D"
   embedding_batch_size: 32
